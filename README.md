@@ -17,23 +17,26 @@ define **tasks** that satisfy them — by writing Rust code.
 
 ## Quickstart
 
-### Add chezfl as a dependency
+### Clone the repo and create a config branch
 
-```toml
-[dependencies]
-chezfl = { git = "https://github.com/you/chezfl" }
-anyhow = "1"
+```bash
+git clone https://github.com/wppopqpu/chezfl
+cd chezfl
+git checkout -b my-config        # your personal config branch
 ```
 
-### Write your config (`src/main.rs`)
+### Write your config (`src/bin/my_config.rs`)
 
-**Builder API:**
+A ready-to-use template is provided at [`src/bin/my_config.rs`](src/bin/my_config.rs).
+Uncomment and fill in your own targets and tasks:
 
 ```rust
 use chezfl::{App, Target, Task, run_cli};
 
 fn main() -> anyhow::Result<()> {
     let mut app = App::new();
+
+    app.target(Target::new("network"));
 
     app.target(
         Target::new("rg_installed")
@@ -52,13 +55,11 @@ fn main() -> anyhow::Result<()> {
             }),
     );
 
-    app.target(Target::new("network")); // aggregate target
-
     run_cli(&mut app)
 }
 ```
 
-**Macro API (identical semantics, less boilerplate):**
+**Macro API** (identical semantics, less boilerplate):
 
 ```rust
 use chezfl::{target, task, run};
@@ -67,11 +68,13 @@ fn main() -> anyhow::Result<()> {
     target!("network");
 
     target!("rg_installed",
+        description: "ripgrep (rg) is installed",
         check: || chezfl::tools::yay::is_installed("ripgrep"),
         depends_on: [network],
     );
 
     task!("install_rg",
+        description: "Install ripgrep via yay",
         satisfies: [rg_installed],
         depends_on: [network],
         labels: ["install"],
@@ -84,6 +87,8 @@ fn main() -> anyhow::Result<()> {
     run!()
 }
 ```
+
+See [`examples/laptop.rs`](examples/laptop.rs) for the full macro-API example.
 
 ### Build and run
 
@@ -99,6 +104,33 @@ cargo build --release
 # Converge: check → run tasks → re-check
 ./target/release/my-config apply
 ```
+
+## Workflow: keep your config in sync with chezfl
+
+chezfl and your config live in the same repository. A two-branch workflow
+keeps them separate:
+
+```text
+main          — chezfl library source (receives upstream updates)
+my-config     — your branch: src/bin/my_config.rs + chezfl source
+```
+
+**When chezfl has upstream changes:**
+
+```bash
+git checkout main
+git pull origin main            # get latest chezfl
+git checkout my-config
+git merge main                  # bring chezfl updates into your config
+```
+
+**Your personal config stays in `my-config`** — the `main` branch is never
+polluted with your local targets, so `git merge main` is always clean on
+the config side.
+
+This approach works because `src/bin/my_config.rs` is gitignored from the
+upstream perspective — it only exists in your branch. The chezfl library
+sources (`src/lib.rs`, `src/app.rs`, …) are the same in both branches.
 
 ## Cmd API (running commands)
 

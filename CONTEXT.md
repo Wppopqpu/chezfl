@@ -30,6 +30,7 @@ Available as a builder (`cmd("git").arg("clone").exec()`) or a one-shot function
 **Tool**:
 A convenience wrapper function that uses `Cmd` internally. Organized by program name under `chezfl::tools::*` (e.g., `tools::git::clone`, `tools::yay::install`).
 Tools are designed to be called inside a Task's `run` closure — they are helpers for the *how*, not the *what*.
+Tools that modify the system are **interactive by default** — they use [`exec()`] (inherit terminal) rather than `--noconfirm` flags, so the user must confirm destructive operations at the terminal. Read-only tools use [`run()`] (captured output).
 *Avoid*: Plugin, extension
 
 **Task**:

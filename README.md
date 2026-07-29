@@ -146,9 +146,10 @@ chezfl ships with convenience wrappers for common programs in
 ```rust
 use chezfl::tools::yay;
 
-yay::install(&["ripgrep", "fd"])?;   // yay -S --noconfirm
-yay::remove(&["firefox"])?;           // yay -R --noconfirm
-yay::update()?;                       // yay -Syu --noconfirm
+yay::install(&["ripgrep", "fd"])?;      // yay -S (interactive)
+yay::remove(&["firefox"])?;             // yay -R (interactive)
+yay::remove_recursive(&["firefox"])?;   // yay -Rs (interactive)
+yay::update()?;                         // yay -Syu (interactive)
 let installed = yay::is_installed("ripgrep")?;
 ```
 

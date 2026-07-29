@@ -172,6 +172,13 @@ fn print_steps(steps: &[Step], is_plan: bool, show_descriptions: bool) {
             s.to_string()
         }
     };
+    let red_strike = |s: &str| {
+        if color {
+            format!("\x1b[31;9m{s}\x1b[0m")
+        } else {
+            s.to_string()
+        }
+    };
     let bold = |s: &str| {
         if color {
             format!("\x1b[1m{s}\x1b[0m")
@@ -193,7 +200,11 @@ fn print_steps(steps: &[Step], is_plan: bool, show_descriptions: bool) {
         };
         let desc = match &step.description {
             Some(d) if show_descriptions || step.sat == crate::Satisfaction::Unsatisfied => {
-                format!("  {}", dim(d))
+                if step.sat == crate::Satisfaction::Unsatisfied {
+                    format!("  {}", red_strike(d))
+                } else {
+                    format!("  {}", dim(d))
+                }
             }
             _ => String::new(),
         };

@@ -13,8 +13,8 @@ pub mod task;
 pub mod tools;
 
 pub use app::{App, Config};
-pub use cmd::{cmd, run_cmd, Cmd, Output as CmdOutput};
 use clap::Parser;
+pub use cmd::{Cmd, Output as CmdOutput, cmd, run_cmd};
 pub use target::Target;
 pub use task::Task;
 
@@ -72,7 +72,11 @@ pub fn run_cli(app: &mut App) -> anyhow::Result<()> {
 
     if !cli.no_banner {
         if std::io::stdout().is_terminal() {
-            for line in BANNER.trim_start_matches('\n').trim_end_matches('\n').lines() {
+            for line in BANNER
+                .trim_start_matches('\n')
+                .trim_end_matches('\n')
+                .lines()
+            {
                 println!("\x1b[48;5;183m\x1b[30m{}\x1b[0m", line);
             }
         } else {
@@ -94,7 +98,11 @@ pub fn run_cli(app: &mut App) -> anyhow::Result<()> {
     for s in &cli.recheck {
         app.state_mut().unset(s);
     }
-    // State is saved during apply, or we can provide a --save flag later
+    // Persist immediately so manual overrides survive even if a later
+    // subcommand crashes or doesn't save (e.g. plan).
+    if !cli.set.is_empty() || !cli.unset.is_empty() || !cli.recheck.is_empty() {
+        let _ = app.save_state();
+    }
 
     let config = Config {
         label_filter: if cli.label.is_empty() {
@@ -136,11 +144,41 @@ fn print_steps(steps: &[Step], is_plan: bool, show_descriptions: bool) {
 
     let color = std::io::stdout().is_terminal();
 
-    let green = |s: &str| if color { format!("\x1b[32m{s}\x1b[0m") } else { s.to_string() };
-    let red = |s: &str| if color { format!("\x1b[31m{s}\x1b[0m") } else { s.to_string() };
-    let yellow = |s: &str| if color { format!("\x1b[33m{s}\x1b[0m") } else { s.to_string() };
-    let dim = |s: &str| if color { format!("\x1b[2m{s}\x1b[0m") } else { s.to_string() };
-    let bold = |s: &str| if color { format!("\x1b[1m{s}\x1b[0m") } else { s.to_string() };
+    let green = |s: &str| {
+        if color {
+            format!("\x1b[32m{s}\x1b[0m")
+        } else {
+            s.to_string()
+        }
+    };
+    let red = |s: &str| {
+        if color {
+            format!("\x1b[31m{s}\x1b[0m")
+        } else {
+            s.to_string()
+        }
+    };
+    let yellow = |s: &str| {
+        if color {
+            format!("\x1b[33m{s}\x1b[0m")
+        } else {
+            s.to_string()
+        }
+    };
+    let dim = |s: &str| {
+        if color {
+            format!("\x1b[2m{s}\x1b[0m")
+        } else {
+            s.to_string()
+        }
+    };
+    let bold = |s: &str| {
+        if color {
+            format!("\x1b[1m{s}\x1b[0m")
+        } else {
+            s.to_string()
+        }
+    };
 
     for step in steps {
         let icon = match step.sat {

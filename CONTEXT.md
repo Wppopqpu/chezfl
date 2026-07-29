@@ -56,7 +56,7 @@ On `check` and `apply`, chezfl uses the following logic:
 Aggregate targets are never cached — their satisfaction is always derived from their current dependencies' satisfaction. Writing state happens after every leaf-target check (not just after tasks run), ensuring the cache stays fresh.
 
 **Manual override**:
-Users can set or unset a target's satisfaction via CLI: `--set <target>=satisfied`, `--unset <target>`, `--recheck <target>`. Manually set targets skip their check function until explicitly rechecked.
+Users can set or unset a target's satisfaction via CLI: `--set <target>`, `--unset <target>`, `--recheck <target>`. Manually set targets skip their check function until explicitly rechecked. All manual overrides are persisted to the state file immediately (after processing all `--set`/`--unset`/`--recheck` flags), so they survive even if the subsequent subcommand crashes or doesn't save (e.g. `plan`).
 
 **Configuration-as-Code**:
 Users declare targets and tasks by calling chezfl's Rust API directly from Rust source files. There is no separate config language, no YAML/TOML, and no DSL parser.

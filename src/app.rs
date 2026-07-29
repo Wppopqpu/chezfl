@@ -99,6 +99,17 @@ impl App {
         self.tasks.get(name)
     }
 
+    /// Persist state to the configured state file path.
+    ///
+    /// Does nothing if no state path was configured (e.g., [`App::new`]).
+    pub fn save_state(&self) -> anyhow::Result<()> {
+        if let Some(path) = &self.state_path {
+            self.state.save_to(path)
+        } else {
+            Ok(())
+        }
+    }
+
     /// Iterate over all registered targets.
     pub fn all_targets(&self) -> impl Iterator<Item = &Target> {
         self.targets.values()
@@ -186,7 +197,8 @@ impl App {
         for name in &order {
             let target = &self.targets[name];
             let (sat, detail, _from_cache) = self.eval_target(target, &results);
-            self.state.set_check_result(name, sat == Satisfaction::Satisfied);
+            self.state
+                .set_check_result(name, sat == Satisfaction::Satisfied);
             steps.push(self.mk_step(name, sat, detail.clone()));
             results.insert(name, sat);
         }
@@ -219,7 +231,11 @@ impl App {
 
         for name in &order {
             if blocked.contains(name.as_str()) {
-                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, "(skipped, upstream failure)".to_string()));
+                steps.push(self.mk_step(
+                    name,
+                    Satisfaction::Unsatisfied,
+                    "(skipped, upstream failure)".to_string(),
+                ));
                 continue;
             }
 
@@ -243,7 +259,11 @@ impl App {
 
             if self.is_task_disabled(task, config) {
                 sat_map.insert(name, Satisfaction::Unsatisfied);
-                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, "(task disabled by label filter)".to_string()));
+                steps.push(self.mk_step(
+                    name,
+                    Satisfaction::Unsatisfied,
+                    "(task disabled by label filter)".to_string(),
+                ));
                 continue;
             }
 
@@ -254,7 +274,11 @@ impl App {
                 .all(|dep| sat_map.get(dep.as_str()) == Some(&Satisfaction::Satisfied));
             if !task_deps_ok {
                 sat_map.insert(name, Satisfaction::Unsatisfied);
-                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, "(task deps not satisfied)".to_string()));
+                steps.push(self.mk_step(
+                    name,
+                    Satisfaction::Unsatisfied,
+                    "(task deps not satisfied)".to_string(),
+                ));
                 for sat in &task.satisfies {
                     blocked.insert(sat);
                 }
@@ -278,7 +302,11 @@ impl App {
                             .set_check_result(sat_name, rsat == Satisfaction::Satisfied);
                     } else {
                         sat_map.insert(sat_name, Satisfaction::Unsatisfied);
-                        steps.push(self.mk_step(sat_name, Satisfaction::Unsatisfied, "(task failed)".to_string()));
+                        steps.push(self.mk_step(
+                            sat_name,
+                            Satisfaction::Unsatisfied,
+                            "(task failed)".to_string(),
+                        ));
                         self.state.set_check_result(sat_name, false);
                         blocked.insert(sat_name);
                     }
@@ -310,14 +338,22 @@ impl App {
 
         for name in &order {
             if blocked.contains(name.as_str()) {
-                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, "(would be skipped, upstream failure)".to_string()));
+                steps.push(self.mk_step(
+                    name,
+                    Satisfaction::Unsatisfied,
+                    "(would be skipped, upstream failure)".to_string(),
+                ));
                 continue;
             }
 
             // If this target would already be satisfied by a previous task, skip
             if would_satisfy.contains(name.as_str()) {
                 sat_map.insert(name, Satisfaction::Satisfied);
-                steps.push(self.mk_step(name, Satisfaction::Satisfied, "(would be satisfied by task)".to_string()));
+                steps.push(self.mk_step(
+                    name,
+                    Satisfaction::Satisfied,
+                    "(would be satisfied by task)".to_string(),
+                ));
                 continue;
             }
 
@@ -338,7 +374,11 @@ impl App {
 
             if self.is_task_disabled(task, config) {
                 sat_map.insert(name, Satisfaction::Unsatisfied);
-                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, "(task disabled by label filter)".to_string()));
+                steps.push(self.mk_step(
+                    name,
+                    Satisfaction::Unsatisfied,
+                    "(task disabled by label filter)".to_string(),
+                ));
                 continue;
             }
 
@@ -349,7 +389,11 @@ impl App {
             });
             if !task_deps_ok {
                 sat_map.insert(name, Satisfaction::Unsatisfied);
-                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, "(task deps not satisfied)".to_string()));
+                steps.push(self.mk_step(
+                    name,
+                    Satisfaction::Unsatisfied,
+                    "(task deps not satisfied)".to_string(),
+                ));
                 for sat in &task.satisfies {
                     blocked.insert(sat);
                 }
@@ -360,7 +404,11 @@ impl App {
             for sat_name in &task.satisfies {
                 would_satisfy.insert(sat_name);
                 sat_map.insert(sat_name, Satisfaction::Satisfied);
-                steps.push(self.mk_step(sat_name, Satisfaction::Satisfied, "(would be satisfied by task)".to_string()));
+                steps.push(self.mk_step(
+                    sat_name,
+                    Satisfaction::Satisfied,
+                    "(would be satisfied by task)".to_string(),
+                ));
             }
         }
 
@@ -446,7 +494,11 @@ impl App {
                 Some(true) => Satisfaction::Satisfied,
                 _ => Satisfaction::Unsatisfied,
             };
-            let detail = if sat == Satisfaction::Satisfied { "(manually set)" } else { "(manually unset)" };
+            let detail = if sat == Satisfaction::Satisfied {
+                "(manually set)"
+            } else {
+                "(manually unset)"
+            };
             return (sat, detail.to_string(), false);
         }
 
@@ -455,7 +507,9 @@ impl App {
             if let Some(ts) = self.state.get(&target.name)
                 && ts.satisfied == Some(true)
             {
-                let deps_ok = target.depends_on.iter()
+                let deps_ok = target
+                    .depends_on
+                    .iter()
                     .all(|dep| deps_sat.get(dep.as_str()) == Some(&Satisfaction::Satisfied));
                 if deps_ok {
                     return (Satisfaction::Satisfied, "(cached)".to_string(), true);
@@ -464,12 +518,20 @@ impl App {
             match check() {
                 Ok(true) => (Satisfaction::Satisfied, "".to_string(), false),
                 Ok(false) => (Satisfaction::Unsatisfied, "".to_string(), false),
-                Err(e) => (Satisfaction::Unsatisfied, format!("check error: {e}"), false),
+                Err(e) => (
+                    Satisfaction::Unsatisfied,
+                    format!("check error: {e}"),
+                    false,
+                ),
             }
         } else {
             // Aggregate
             if target.depends_on.is_empty() {
-                (Satisfaction::Unsatisfied, "(no check, no deps)".to_string(), false)
+                (
+                    Satisfaction::Unsatisfied,
+                    "(no check, no deps)".to_string(),
+                    false,
+                )
             } else if target
                 .depends_on
                 .iter()
@@ -517,7 +579,12 @@ impl App {
 
     fn mk_step(&self, name: &str, sat: Satisfaction, detail: String) -> Step {
         let description = self.targets.get(name).and_then(|t| t.description.clone());
-        Step { name: name.to_string(), description, sat, detail }
+        Step {
+            name: name.to_string(),
+            description,
+            sat,
+            detail,
+        }
     }
 
     fn is_task_disabled(&self, task: &Task, config: &Config) -> bool {
@@ -604,14 +671,15 @@ mod tests {
         app.validate().unwrap();
 
         // Pre-populate state as satisfied (simulating a previous run)
-        app.state
-            .set_check_result("leaf", true);
+        app.state.set_check_result("leaf", true);
 
         let steps = app.run_check(&make_config(), &[]);
         assert_eq!(steps[0].sat, Satisfaction::Satisfied);
         assert!(steps[0].detail.contains("cached"));
-        assert!(!called.load(std::sync::atomic::Ordering::SeqCst),
-            "check should not have been called");
+        assert!(
+            !called.load(std::sync::atomic::Ordering::SeqCst),
+            "check should not have been called"
+        );
     }
 
     #[test]
@@ -628,8 +696,10 @@ mod tests {
         let steps = app.run_check(&make_config(), &[]);
         // "dep" is unsatisfied → "leaf" cache is invalidated
         assert_eq!(steps[0].sat, Satisfaction::Unsatisfied);
-        assert!(called.load(std::sync::atomic::Ordering::SeqCst),
-            "check should have been called because dep changed");
+        assert!(
+            called.load(std::sync::atomic::Ordering::SeqCst),
+            "check should have been called because dep changed"
+        );
     }
 
     #[test]
@@ -644,8 +714,10 @@ mod tests {
 
         let steps = app.run_check(&make_config(), &[]);
         assert_eq!(steps[0].sat, Satisfaction::Satisfied);
-        assert!(called.load(std::sync::atomic::Ordering::SeqCst),
-            "check should have been called because previous state was unsatisfied");
+        assert!(
+            called.load(std::sync::atomic::Ordering::SeqCst),
+            "check should have been called because previous state was unsatisfied"
+        );
     }
 
     #[test]
@@ -661,8 +733,10 @@ mod tests {
 
         let steps = app.run_check(&make_config(), &[]);
         assert_eq!(steps[2].sat, Satisfaction::Satisfied);
-        assert!(steps[2].detail.contains("aggregate"),
-            "aggregate should show aggregate detail, not cached");
+        assert!(
+            steps[2].detail.contains("aggregate"),
+            "aggregate should show aggregate detail, not cached"
+        );
     }
 
     #[test]

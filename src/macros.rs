@@ -121,8 +121,8 @@ macro_rules! task {
 /// ```
 #[macro_export]
 macro_rules! run {
-    () => {
+    () => {{
         let mut __app = $crate::__internals::take_app();
         $crate::run_cli(&mut __app)
-    };
+    }};
 }

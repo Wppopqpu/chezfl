@@ -7,10 +7,11 @@ chezfl fills the gap that tools like `stow` (dotfile symlinks) cannot cover: pac
 ## Language
 
 **Target**:
-A declaration of a **concrete** desired state. Each target has a unique **name** (string identifier). There are two kinds:
+A declaration of a **concrete** desired state. Each target has a unique **name** (string identifier). Satisfaction is determined by the target's kind:
 
-- **Leaf target**: has a **check** function (`fn() -> anyhow::Result<bool>`) that probes the real system. `Ok(true)` = satisfied, `Ok(false)` = unsatisfied, `Err` = check itself failed.
-- **Aggregate target**: no check function. Its satisfaction is derived entirely from its dependencies — it is satisfied when all its dependency targets are satisfied.
+- **Leaf target**: has a **check** function (`fn() -> anyhow::Result<bool>`) that probes the real system. `Ok(true)` = satisfied, `Ok(false)` = unsatisfied, `Err` = check itself failed. Deps declared on a leaf target affect topological ordering only — the check runs regardless of dep state.
+- **Aggregate target**: no check function. Its satisfaction is derived entirely from its dependencies — it is satisfied when **all** its dependency targets are satisfied. An aggregate with **zero** dependencies is always unsatisfied (it needs a task to satisfy it, or deps to derive from).
+- **Stub target**: a target with neither `check` nor `depends_on`. Always unsatisfied. Useful as a placeholder that must be satisfied by a future task.
 
 A target may declare dependencies on other targets. The dependency graph must be acyclic. A target can only be satisfied by **exactly one** task.
 

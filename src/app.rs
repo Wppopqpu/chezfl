@@ -468,11 +468,13 @@ impl App {
             }
         } else {
             // Aggregate
-            let all_ok = target
+            if target.depends_on.is_empty() {
+                (Satisfaction::Unsatisfied, "(no check, no deps)".to_string(), false)
+            } else if target
                 .depends_on
                 .iter()
-                .all(|dep| deps_sat.get(dep.as_str()) == Some(&Satisfaction::Satisfied));
-            if all_ok {
+                .all(|dep| deps_sat.get(dep.as_str()) == Some(&Satisfaction::Satisfied))
+            {
                 (Satisfaction::Satisfied, "(aggregate)".to_string(), false)
             } else {
                 (
@@ -497,11 +499,12 @@ impl App {
                 Err(e) => (Satisfaction::Unsatisfied, format!("check error: {e}")),
             }
         } else {
-            let all_ok = target.depends_on.iter().all(|dep| {
+            if target.depends_on.is_empty() {
+                (Satisfaction::Unsatisfied, "(no check, no deps)".to_string())
+            } else if target.depends_on.iter().all(|dep| {
                 deps_sat.get(dep.as_str()) == Some(&Satisfaction::Satisfied)
                     || would_satisfy.contains(dep.as_str())
-            });
-            if all_ok {
+            }) {
                 (Satisfaction::Satisfied, "(aggregate)".to_string())
             } else {
                 (

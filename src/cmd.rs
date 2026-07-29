@@ -253,10 +253,14 @@ impl Cmd {
 fn kill_pid(pid: u32) {
     let _ = std::process::Command::new("kill")
         .arg(pid.to_string())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .status();
     thread::sleep(Duration::from_millis(200));
     let _ = std::process::Command::new("kill")
         .args(["-9", &pid.to_string()])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .status();
 }
 

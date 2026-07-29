@@ -81,13 +81,21 @@ impl State {
         self.targets.remove(name);
     }
 
-    /// Record the result of a real check (not manually overridden).
+    /// Record the result of a check or re-check.
+    ///
+    /// Preserves `manually_set` if the target was previously manually
+    /// overridden, so that `--set` persists across `apply`/`check` runs.
     pub fn set_check_result(&mut self, name: &str, satisfied: bool) {
+        let manually_set = self
+            .targets
+            .get(name)
+            .map(|ts| ts.manually_set)
+            .unwrap_or(false);
         self.targets.insert(
             name.to_string(),
             TargetState {
                 satisfied: Some(satisfied),
-                manually_set: false,
+                manually_set,
                 checked_at: Some(chrono_now()),
             },
         );

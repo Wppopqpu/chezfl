@@ -35,6 +35,10 @@ pub struct Cli {
     /// Show target descriptions (always shown for unsatisfied targets)
     #[arg(long, global = true, default_value_t = false)]
     pub show_descriptions: bool,
+
+    /// Suppress the startup banner
+    #[arg(long, global = true, default_value_t = false)]
+    pub no_banner: bool,
 }
 
 /// Available subcommands.

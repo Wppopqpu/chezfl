@@ -18,6 +18,16 @@ use clap::Parser;
 pub use target::Target;
 pub use task::Task;
 
+const BANNER: &str = r"
+  _____    __   __      _____   _____        _____    __      
+ /\ __/\  /\_\ /_/\   /\_____\ /\____\     /\_____\  /\_\     
+ ) )__\/ ( ( (_) ) ) ( (_____/ \/_ ( (    ( (  ___/ ( ( (     
+/ / /     \ \___/ /   \ \__\      \ \_\    \ \ \_    \ \_\    
+\ \ \_    / / _ \ \   / /__/_     / / /__  / / /_\   / / /__  
+ ) )__/\ ( (_( )_) ) ( (_____\   ( (____( / /____/  ( (_____( 
+ \/___\/  \/_/ \_\/   \/_____/    \/____/ \/_/       \/_____/ 
+";
+
 /// Whether a target was satisfied after a check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Satisfaction {
@@ -57,7 +67,18 @@ pub struct Step {
 /// run_cli(&mut app)
 /// ```
 pub fn run_cli(app: &mut App) -> anyhow::Result<()> {
+    use std::io::IsTerminal;
     let cli = cli::Cli::parse();
+
+    if !cli.no_banner {
+        if std::io::stdout().is_terminal() {
+            for line in BANNER.trim_start_matches('\n').trim_end_matches('\n').lines() {
+                println!("\x1b[48;5;183m\x1b[30m{}\x1b[0m", line);
+            }
+        } else {
+            print!("{BANNER}");
+        }
+    }
 
     // Handle --set / --unset / --recheck
     for s in &cli.set {

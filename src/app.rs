@@ -7,12 +7,20 @@ use crate::state::State;
 use crate::target::Target;
 use crate::task::Task;
 
+/// Execution configuration for a check/apply/plan run.
 #[derive(Clone, Default)]
 pub struct Config {
+    /// Only consider tasks that have at least one of these labels.
+    /// `None` means no filter — consider all tasks.
     pub label_filter: Option<Vec<String>>,
+    /// Exclude tasks that have any of these labels.
     pub exclude_labels: Vec<String>,
 }
 
+/// A registry of targets and tasks, and the execution engine.
+///
+/// Use [`App::new`] for a clean slate, [`App::load`] to restore from disk,
+/// or [`App::with_state_path`] for a custom state file location.
 pub struct App {
     targets: HashMap<String, Target>,
     tasks: HashMap<String, Task>,
@@ -27,6 +35,10 @@ impl Default for App {
 }
 
 impl App {
+    /// Create an empty app with no state file.
+    ///
+    /// Targets and tasks must be added manually. State is held in memory only
+    /// (no persistence).
     pub fn new() -> Self {
         App {
             targets: HashMap::new(),
@@ -36,6 +48,11 @@ impl App {
         }
     }
 
+    /// Create an app restored from the default state file
+    /// (`~/.local/state/chezfl/state.toml`).
+    ///
+    /// State changes in [`run_apply`](Self::run_apply) are persisted back
+    /// to this file automatically.
     pub fn load() -> Self {
         let path = crate::state::default_path();
         App {
@@ -46,6 +63,7 @@ impl App {
         }
     }
 
+    /// Create an app with a custom state file path.
     pub fn with_state_path(path: PathBuf) -> Self {
         App {
             targets: HashMap::new(),
@@ -55,39 +73,57 @@ impl App {
         }
     }
 
+    /// Register a target, or get a mutable reference to an existing one
+    /// with the same name.
     pub fn target(&mut self, target: Target) -> &mut Target {
         let name = target.name.clone();
         self.targets.entry(name.clone()).or_insert(target);
         self.targets.get_mut(&name).unwrap()
     }
 
+    /// Register a task, or get a mutable reference to an existing one
+    /// with the same name.
     pub fn task(&mut self, task: Task) -> &mut Task {
         let name = task.name.clone();
         self.tasks.entry(name.clone()).or_insert(task);
         self.tasks.get_mut(&name).unwrap()
     }
 
+    /// Look up a target by name.
     pub fn get_target(&self, name: &str) -> Option<&Target> {
         self.targets.get(name)
     }
 
+    /// Look up a task by name.
     pub fn get_task(&self, name: &str) -> Option<&Task> {
         self.tasks.get(name)
     }
 
+    /// Iterate over all registered targets.
     pub fn all_targets(&self) -> impl Iterator<Item = &Target> {
         self.targets.values()
     }
 
+    /// Access the persisted state.
     pub fn state(&self) -> &State {
         &self.state
     }
 
+    /// Mutable access to the persisted state.
     pub fn state_mut(&mut self) -> &mut State {
         &mut self.state
     }
 
-    /// Validate the graph. Must be called before run_*.
+    /// Validate the target/task graph.
+    ///
+    /// Checks:
+    /// - All dependency references resolve to known targets.
+    /// - All task `satisfies`/`depends_on` references resolve to known targets.
+    /// - No target is satisfied by more than one task.
+    /// - The dependency graph contains no cycles.
+    ///
+    /// Must be called before [`run_check`](Self::run_check),
+    /// [`run_apply`](Self::run_apply), or [`run_plan`](Self::run_plan).
     pub fn validate(&mut self) -> anyhow::Result<()> {
         for target in self.targets.values() {
             for dep in &target.depends_on {
@@ -132,7 +168,15 @@ impl App {
 
     // ── check ─────────────────────────────────────────────────────────
 
-    /// Check targets, return a topological list of steps.
+    /// Check target satisfaction.
+    ///
+    /// Runs the `check` function of each relevant target (or evaluates
+    /// aggregate targets from their dependencies) and returns a topological
+    /// list of results. No tasks are executed.
+    ///
+    /// If `names` is empty, all registered targets are checked.
+    /// Otherwise only the named targets (and their transitive dependencies)
+    /// are included.
     pub fn run_check(&self, _config: &Config, names: &[String]) -> Vec<Step> {
         let order = self.topo_order(names);
         let mut results: HashMap<&str, Satisfaction> = HashMap::new();
@@ -154,7 +198,18 @@ impl App {
 
     // ── apply ─────────────────────────────────────────────────────────
 
-    /// Apply: check → run tasks for unsatisfied → recheck.
+    /// Apply — check targets, run tasks for unsatisfied ones, re-check.
+    ///
+    /// Algorithm:
+    /// 1. Collect relevant targets in topological order.
+    /// 2. For each target: check → if satisfied, skip.
+    /// 3. If unsatisfied and a task exists (and is not disabled by label
+    ///    filter, and its own dependency targets are satisfied), run the task.
+    /// 4. After a successful task, re-check all targets it satisfies.
+    /// 5. If a task fails, its targets are marked as skipped and all
+    ///    downstream targets are also skipped (best-effort).
+    ///
+    /// State is persisted automatically if a `state_path` was configured.
     pub fn run_apply(&mut self, config: &Config, names: &[String]) -> Vec<Step> {
         let order = self.topo_order(names);
         let mut sat_map: HashMap<&str, Satisfaction> = HashMap::new();
@@ -265,7 +320,13 @@ impl App {
 
     // ── plan ─────────────────────────────────────────────────────────
 
-    /// Plan: simulate apply without running tasks.
+    /// Plan — simulate an apply run without side effects.
+    ///
+    /// Unlike [`run_apply`](Self::run_apply), real `check` functions are
+    /// still called to show current state, but tasks are never executed.
+    /// When a task *would* run, its targets are marked as
+    /// "would be satisfied by task" so that downstream targets can be
+    /// evaluated optimistically.
     pub fn run_plan(&self, config: &Config, names: &[String]) -> Vec<Step> {
         let order = self.topo_order(names);
         let mut sat_map: HashMap<&str, Satisfaction> = HashMap::new();

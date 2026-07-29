@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+/// Persisted state for a single target.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TargetState {
     pub satisfied: Option<bool>,
@@ -10,16 +11,28 @@ pub struct TargetState {
     pub checked_at: Option<String>,
 }
 
+/// TOML-serialised persistence of target satisfaction state.
+///
+/// Stored at `~/.local/state/chezfl/state.toml` by default. Supports
+/// manual overrides (via `--set`/`--unset`) so users can mark targets
+/// as satisfied without running their check function.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct State {
     targets: HashMap<String, TargetState>,
 }
 
 impl State {
+    /// Load state from the default path (`~/.local/state/chezfl/state.toml`).
+    ///
+    /// Returns a default (empty) state if the file does not exist or
+    /// cannot be read.
     pub fn load() -> Self {
         Self::load_from(None)
     }
 
+    /// Load state from an optional custom path.
+    ///
+    /// `None` falls back to [`default_path`].
     pub fn load_from(path: Option<PathBuf>) -> Self {
         let path = path.unwrap_or_else(default_path);
         if !path.exists() {
@@ -32,6 +45,7 @@ impl State {
         toml::from_str(&content).unwrap_or_default()
     }
 
+    /// Persist state to the given file path.
     pub fn save_to(&self, path: &std::path::Path) -> anyhow::Result<()> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -41,10 +55,14 @@ impl State {
         Ok(())
     }
 
+    /// Look up a target's persisted state.
     pub fn get(&self, name: &str) -> Option<&TargetState> {
         self.targets.get(name)
     }
 
+    /// Manually set a target's satisfaction (bypasses check).
+    ///
+    /// This is used by the `--set` CLI flag.
     pub fn set(&mut self, name: &str, satisfied: bool) {
         self.targets.insert(
             name.to_string(),
@@ -56,10 +74,14 @@ impl State {
         );
     }
 
+    /// Remove a target's persisted state (next check will re-run).
+    ///
+    /// This is used by the `--unset` and `--recheck` CLI flags.
     pub fn unset(&mut self, name: &str) {
         self.targets.remove(name);
     }
 
+    /// Record the result of a real check (not manually overridden).
     pub fn set_check_result(&mut self, name: &str, satisfied: bool) {
         self.targets.insert(
             name.to_string(),
@@ -72,6 +94,8 @@ impl State {
     }
 }
 
+/// The default path for the state file:
+/// `$HOME/.local/state/chezfl/state.toml`
 pub fn default_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
     PathBuf::from(home).join(".local/state/chezfl/state.toml")

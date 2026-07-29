@@ -1,3 +1,6 @@
+/// Internal global registry for the macro-based API.
+///
+/// See [`target!`], [`task!`], and [`run!`] macros.
 pub mod __internals;
 pub mod app;
 pub mod cli;
@@ -12,12 +15,16 @@ use clap::Parser;
 pub use target::Target;
 pub use task::Task;
 
+/// Whether a target was satisfied after a check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Satisfaction {
     Satisfied,
     Unsatisfied,
 }
 
+/// One entry in the output of a check/apply/plan run.
+///
+/// Each step corresponds to one target (or one re-check after a task).
 #[derive(Debug, Clone)]
 pub struct Step {
     pub name: String,
@@ -25,7 +32,26 @@ pub struct Step {
     pub detail: String,
 }
 
-/// Parse CLI args and run the appropriate command.
+/// Build an [`App`] via the global registry, parse CLI args, and run.
+///
+/// This is the entry point for the **global-macro** API style:
+///
+/// ```ignore
+/// target!("net");
+/// target!("rg", check: || which("rg").is_ok(), depends_on: [net]);
+/// task!("install_rg", satisfies: [rg], run: || install("rg"));
+/// run!();  // parses argv, calls run_cli
+/// ```
+///
+/// For the **builder** style use [`App`] methods directly and call this with
+/// the built app:
+///
+/// ```ignore
+/// let mut app = App::new();
+/// app.target(Target::new("rg").check(|| which("rg").is_ok()));
+/// app.task(Task::new("install_rg").satisfies("rg").run(|| ...));
+/// run_cli(&mut app)
+/// ```
 pub fn run_cli(app: &mut App) -> anyhow::Result<()> {
     let cli = cli::Cli::parse();
 

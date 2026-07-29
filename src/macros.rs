@@ -1,7 +1,20 @@
-/// Register a target in the global registry.
+/// Declare a target via the global registry.
 ///
-/// Target names in `depends_on` are given as identifiers (not strings).
+/// Target names in `depends_on` are given as **identifiers** (not strings).
 /// `stringify!` converts them to strings at compile time.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Aggregate target (no check, satisfaction from deps)
+/// target!("system_ready", depends_on: [apt, network]);
+///
+/// // Leaf target with check
+/// target!("rg_installed",
+///     check: || Ok(Command::new("which").arg("rg").status()?.success()),
+///     depends_on: [apt],
+/// );
+/// ```
 #[macro_export]
 macro_rules! target {
     // Aggregate target (no check, just deps)
@@ -30,7 +43,24 @@ macro_rules! target {
     };
 }
 
-/// Register a task in the global registry.
+/// Declare a task via the global registry.
+///
+/// Target references in `satisfies` and `depends_on` are given as
+/// **identifiers** (not strings). `stringify!` converts them at compile time.
+///
+/// # Examples
+///
+/// ```ignore
+/// task!("install_rg",
+///     satisfies: [rg_installed],
+///     depends_on: [apt_ready],
+///     labels: ["install"],
+///     run: || {
+///         Command::new("sudo").args(["pacman", "-S", "ripgrep"]).status()?;
+///         Ok(())
+///     },
+/// );
+/// ```
 #[macro_export]
 macro_rules! task {
     ($name:expr, satisfies: [$($sat:ident),+ $(,)?], run: $run:expr $(,)?) => {
@@ -71,7 +101,24 @@ macro_rules! task {
     };
 }
 
-/// Build the global App from registered targets/tasks and run the CLI.
+/// Build the global [`App`](crate::App) from registered targets/tasks
+/// and run the CLI.
+///
+/// Must be called after all [`target!`] and [`task!`] declarations.
+/// Expands to:
+///
+/// ```ignore
+/// let mut __app = chezfl::__internals::take_app();
+/// chezfl::run_cli(&mut __app)
+/// ```
+///
+/// # Example
+///
+/// ```ignore
+/// target!("base");
+/// task!("do_stuff", satisfies: [base], run: || Ok(()));
+/// run!();  // parses argv, runs apply/check/plan
+/// ```
 #[macro_export]
 macro_rules! run {
     () => {

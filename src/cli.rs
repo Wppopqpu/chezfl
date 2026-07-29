@@ -1,5 +1,11 @@
 use clap::{Parser, Subcommand};
 
+/// CLI entry point: parse command-line arguments and dispatch.
+///
+/// Every subcommand supports execution filters
+/// ([`--label`](Cli::label)/[`--exclude-label`](Cli::exclude_label))
+/// and state overrides
+/// ([`--set`](Cli::set)/[`--unset`](Cli::unset)/[`--recheck`](Cli::recheck)).
 #[derive(Parser)]
 #[command(name = "chezfl", version)]
 pub struct Cli {
@@ -27,6 +33,7 @@ pub struct Cli {
     pub recheck: Vec<String>,
 }
 
+/// Available subcommands.
 #[derive(Subcommand)]
 pub enum Command {
     /// Check target satisfaction

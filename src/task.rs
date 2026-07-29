@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-pub type RunFn = Arc<dyn Fn() -> anyhow::Result<()>>;
+pub type RunFn = Arc<dyn Fn() -> anyhow::Result<()> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct Task {
@@ -39,7 +39,7 @@ impl Task {
 
     pub fn run<F>(mut self, f: F) -> Self
     where
-        F: Fn() -> anyhow::Result<()> + 'static,
+        F: Fn() -> anyhow::Result<()> + Send + Sync + 'static,
     {
         self.run = Some(Arc::new(f));
         self

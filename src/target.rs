@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-pub type CheckFn = Arc<dyn Fn() -> anyhow::Result<bool>>;
+pub type CheckFn = Arc<dyn Fn() -> anyhow::Result<bool> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct Target {
@@ -20,7 +20,7 @@ impl Target {
 
     pub fn check<F>(mut self, f: F) -> Self
     where
-        F: Fn() -> anyhow::Result<bool> + 'static,
+        F: Fn() -> anyhow::Result<bool> + Send + Sync + 'static,
     {
         self.check = Some(Arc::new(f));
         self

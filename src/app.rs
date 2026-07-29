@@ -31,8 +31,18 @@ impl App {
         App {
             targets: HashMap::new(),
             tasks: HashMap::new(),
-            state: State::load(),
+            state: State::default(),
             state_path: None,
+        }
+    }
+
+    pub fn load() -> Self {
+        let path = crate::state::default_path();
+        App {
+            targets: HashMap::new(),
+            tasks: HashMap::new(),
+            state: State::load(),
+            state_path: Some(path),
         }
     }
 
@@ -391,10 +401,10 @@ impl App {
             }
         }
 
-        let mut queue: Vec<String> = in_deg
+        let mut queue: Vec<String> = names_set
             .iter()
-            .filter(|(_, d)| **d == 0)
-            .map(|(n, _)| n.clone())
+            .filter(|n| in_deg.get(n.as_str()) == Some(&0))
+            .cloned()
             .collect();
         queue.reverse();
 

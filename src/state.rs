@@ -72,7 +72,7 @@ impl State {
     }
 }
 
-fn default_path() -> PathBuf {
+pub fn default_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
     PathBuf::from(home).join(".local/state/chezfl/state.toml")
 }

@@ -108,17 +108,32 @@ pub fn run_cli(app: &mut App) -> anyhow::Result<()> {
 }
 
 fn print_steps(steps: &[Step], is_plan: bool) {
-    let prefix = if is_plan { "(P) " } else { "" };
+    use std::io::IsTerminal;
+
+    let color = std::io::stdout().is_terminal();
+
+    let green = |s: &str| if color { format!("\x1b[32m{s}\x1b[0m") } else { s.to_string() };
+    let red = |s: &str| if color { format!("\x1b[31m{s}\x1b[0m") } else { s.to_string() };
+    let yellow = |s: &str| if color { format!("\x1b[33m{s}\x1b[0m") } else { s.to_string() };
+    let dim = |s: &str| if color { format!("\x1b[2m{s}\x1b[0m") } else { s.to_string() };
+    let bold = |s: &str| if color { format!("\x1b[1m{s}\x1b[0m") } else { s.to_string() };
+
     for step in steps {
         let icon = match step.sat {
-            crate::Satisfaction::Satisfied => "✓",
-            crate::Satisfaction::Unsatisfied => "✗",
+            crate::Satisfaction::Satisfied => green("✓"),
+            crate::Satisfaction::Unsatisfied => red("✗"),
         };
+        let name = bold(&step.name);
         let detail = if step.detail.is_empty() {
             String::new()
         } else {
-            format!("  ({})", step.detail)
+            format!("  {}", dim(&format!("({})", step.detail)))
         };
-        println!("{}{} {}{}", prefix, icon, step.name, detail);
+        let prefix = if is_plan {
+            format!("{} ", yellow("(P)"))
+        } else {
+            String::new()
+        };
+        println!("{}{} {}{}", prefix, icon, name, detail);
     }
 }

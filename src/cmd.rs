@@ -131,7 +131,11 @@ impl Cmd {
                         self.program,
                         self.args.join(" "),
                         output.status.code(),
-                        if stderr.is_empty() { String::new() } else { format!(": {stderr}") },
+                        if stderr.is_empty() {
+                            String::new()
+                        } else {
+                            format!(": {stderr}")
+                        },
                     );
                     if attempt == max_attempts {
                         anyhow::bail!(msg);
@@ -181,7 +185,11 @@ impl Cmd {
         if interactive {
             let mut child = self.build(true).spawn()?;
             let status = child.wait()?;
-            Ok(Output { status, stdout: String::new(), stderr: String::new() })
+            Ok(Output {
+                status,
+                stdout: String::new(),
+                stderr: String::new(),
+            })
         } else {
             let std_output = self.build(false).output()?;
             Ok(Output {
@@ -232,7 +240,11 @@ impl Cmd {
         });
 
         match rx.recv_timeout(dur) {
-            Ok(Ok(status)) => Ok(Output { status, stdout: String::new(), stderr: String::new() }),
+            Ok(Ok(status)) => Ok(Output {
+                status,
+                stdout: String::new(),
+                stderr: String::new(),
+            }),
             Ok(Err(e)) => Err(e.into()),
             Err(RecvTimeoutError::Timeout) => {
                 kill_pid(pid);
@@ -288,7 +300,10 @@ mod tests {
         let err = cmd("false").run().unwrap_err();
         let msg = format!("{err:#}");
         assert!(msg.contains("false"), "error should name command: {msg}");
-        assert!(msg.contains("exit code"), "error should mention code: {msg}");
+        assert!(
+            msg.contains("exit code"),
+            "error should mention code: {msg}"
+        );
     }
 
     #[test]
@@ -310,7 +325,12 @@ mod tests {
 
     #[test]
     fn test_args_chaining() {
-        let out = cmd("echo").arg("a").arg("b").args(&["c", "d"]).run().unwrap();
+        let out = cmd("echo")
+            .arg("a")
+            .arg("b")
+            .args(&["c", "d"])
+            .run()
+            .unwrap();
         assert_eq!(out.stdout.trim(), "a b c d");
     }
 
@@ -332,19 +352,13 @@ mod tests {
     #[test]
     fn test_timeout_captured_trivial() {
         // Should complete well within timeout
-        let out = cmd("true")
-            .timeout(Duration::from_secs(10))
-            .run()
-            .unwrap();
+        let out = cmd("true").timeout(Duration::from_secs(10)).run().unwrap();
         assert!(out.status.success());
     }
 
     #[test]
     fn test_timeout_interactive_trivial() {
-        let out = cmd("true")
-            .timeout(Duration::from_secs(10))
-            .exec()
-            .unwrap();
+        let out = cmd("true").timeout(Duration::from_secs(10)).exec().unwrap();
         assert!(out.status.success());
     }
 

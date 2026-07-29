@@ -1,4 +1,4 @@
-use crate::cmd::{cmd, run_cmd, Output};
+use crate::cmd::{Output, cmd, run_cmd};
 
 /// Install packages via `yay -S` (supports AUR and official).
 ///

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::cmd::{cmd, Output};
+use crate::cmd::{Output, cmd};
 
 /// Clone a repository into `dir`.
 ///
@@ -13,9 +13,7 @@ pub fn clone(url: &str, dir: impl AsRef<Path>) -> anyhow::Result<Output> {
 /// Pull latest changes in `dir`.
 pub fn pull(dir: impl AsRef<Path>) -> anyhow::Result<Output> {
     let dir = dir.as_ref().to_string_lossy().to_string();
-    cmd("git")
-        .args(&["-C", &dir, "pull", "--ff-only"])
-        .exec()
+    cmd("git").args(&["-C", &dir, "pull", "--ff-only"]).exec()
 }
 
 /// Fetch from all remotes in `dir`.

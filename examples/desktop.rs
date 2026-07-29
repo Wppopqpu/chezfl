@@ -17,9 +17,7 @@ fn main() -> anyhow::Result<()> {
 
     // ── targets ─────────────────────────────────────────────────────
 
-    app.target(Target::new("network")
-        .description("Network is reachable"),
-    );
+    app.target(Target::new("network").description("Network is reachable"));
 
     app.target(
         Target::new("rg_installed")
@@ -51,8 +49,11 @@ fn main() -> anyhow::Result<()> {
         Target::new("chezfl_built")
             .description("chezfl is built in release mode")
             .check(|| {
-                Ok(run_cmd("test", &["-f", "/home/user/src/chezfl/target/release/chezfl"])
-                    .is_ok())
+                Ok(run_cmd(
+                    "test",
+                    &["-f", "/home/user/src/chezfl/target/release/chezfl"],
+                )
+                .is_ok())
             })
             .depends_on("chezfl_repo"),
     );
@@ -90,10 +91,7 @@ fn main() -> anyhow::Result<()> {
             .depends_on("network")
             .label("clone")
             .run(|| {
-                git::clone(
-                    "https://github.com/user/chezfl",
-                    "/home/user/src/chezfl",
-                )?;
+                git::clone("https://github.com/user/chezfl", "/home/user/src/chezfl")?;
                 Ok(())
             }),
     );

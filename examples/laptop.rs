@@ -4,7 +4,7 @@
 //!
 //! This example uses the **macro API** to keep the config concise.
 
-use chezfl::{cmd::cmd, target, task, run, tools::yay};
+use chezfl::{cmd::cmd, run, target, task, tools::yay};
 
 fn main() -> anyhow::Result<()> {
     target!("network",

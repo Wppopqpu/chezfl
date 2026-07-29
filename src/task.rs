@@ -15,6 +15,7 @@ pub type RunFn = Arc<dyn Fn() -> anyhow::Result<()> + Send + Sync>;
 #[derive(Clone)]
 pub struct Task {
     pub name: String,
+    pub description: Option<String>,
     pub satisfies: Vec<String>,
     pub depends_on: Vec<String>,
     pub labels: Vec<String>,
@@ -26,11 +27,18 @@ impl Task {
     pub fn new(name: impl Into<String>) -> Self {
         Task {
             name: name.into(),
+            description: None,
             satisfies: Vec::new(),
             depends_on: Vec::new(),
             labels: Vec::new(),
             run: None,
         }
+    }
+
+    /// Attach a human-readable description of what this task does.
+    pub fn description(mut self, text: impl Into<String>) -> Self {
+        self.description = Some(text.into());
+        self
     }
 
     /// Declare that this task satisfies the named target.

@@ -21,9 +21,21 @@ macro_rules! target {
     ($name:expr $(,)?) => {
         $crate::__internals::register_target($crate::Target::new($name));
     };
+    ($name:expr, description: $desc:expr $(,)?) => {
+        $crate::__internals::register_target(
+            $crate::Target::new($name).description($desc),
+        );
+    };
     ($name:expr, depends_on: [$($dep:ident),* $(,)?] $(,)?) => {
         $crate::__internals::register_target({
             let mut __t = $crate::Target::new($name);
+            $(__t = __t.depends_on(stringify!($dep));)*
+            __t
+        });
+    };
+    ($name:expr, description: $desc:expr, depends_on: [$($dep:ident),* $(,)?] $(,)?) => {
+        $crate::__internals::register_target({
+            let mut __t = $crate::Target::new($name).description($desc);
             $(__t = __t.depends_on(stringify!($dep));)*
             __t
         });
@@ -34,9 +46,21 @@ macro_rules! target {
             $crate::Target::new($name).check($check),
         );
     };
+    ($name:expr, description: $desc:expr, check: $check:expr $(,)?) => {
+        $crate::__internals::register_target(
+            $crate::Target::new($name).description($desc).check($check),
+        );
+    };
     ($name:expr, check: $check:expr, depends_on: [$($dep:ident),* $(,)?] $(,)?) => {
         $crate::__internals::register_target({
             let mut __t = $crate::Target::new($name).check($check);
+            $(__t = __t.depends_on(stringify!($dep));)*
+            __t
+        });
+    };
+    ($name:expr, description: $desc:expr, check: $check:expr, depends_on: [$($dep:ident),* $(,)?] $(,)?) => {
+        $crate::__internals::register_target({
+            let mut __t = $crate::Target::new($name).description($desc).check($check);
             $(__t = __t.depends_on(stringify!($dep));)*
             __t
         });
@@ -70,10 +94,26 @@ macro_rules! task {
             __t.run($run)
         });
     };
+    ($name:expr, description: $desc:expr, satisfies: [$($sat:ident),+ $(,)?], run: $run:expr $(,)?) => {
+        $crate::__internals::register_task({
+            let mut __t = $crate::Task::new($name).description($desc);
+            $(__t = __t.satisfies(stringify!($sat));)+
+            __t.run($run)
+        });
+    };
     ($name:expr, satisfies: [$($sat:ident),+ $(,)?],
      depends_on: [$($dep:ident),+ $(,)?], run: $run:expr $(,)?) => {
         $crate::__internals::register_task({
             let mut __t = $crate::Task::new($name);
+            $(__t = __t.satisfies(stringify!($sat));)+
+            $(__t = __t.depends_on(stringify!($dep));)+
+            __t.run($run)
+        });
+    };
+    ($name:expr, description: $desc:expr, satisfies: [$($sat:ident),+ $(,)?],
+     depends_on: [$($dep:ident),+ $(,)?], run: $run:expr $(,)?) => {
+        $crate::__internals::register_task({
+            let mut __t = $crate::Task::new($name).description($desc);
             $(__t = __t.satisfies(stringify!($sat));)+
             $(__t = __t.depends_on(stringify!($dep));)+
             __t.run($run)
@@ -88,11 +128,31 @@ macro_rules! task {
             __t.run($run)
         });
     };
+    ($name:expr, description: $desc:expr, satisfies: [$($sat:ident),+ $(,)?],
+     labels: [$($label:expr),+ $(,)?], run: $run:expr $(,)?) => {
+        $crate::__internals::register_task({
+            let mut __t = $crate::Task::new($name).description($desc);
+            $(__t = __t.satisfies(stringify!($sat));)+
+            $(__t = __t.label($label);)+
+            __t.run($run)
+        });
+    };
     ($name:expr, satisfies: [$($sat:ident),+ $(,)?],
      depends_on: [$($dep:ident),+ $(,)?],
      labels: [$($label:expr),+ $(,)?], run: $run:expr $(,)?) => {
         $crate::__internals::register_task({
             let mut __t = $crate::Task::new($name);
+            $(__t = __t.satisfies(stringify!($sat));)+
+            $(__t = __t.depends_on(stringify!($dep));)+
+            $(__t = __t.label($label);)+
+            __t.run($run)
+        });
+    };
+    ($name:expr, description: $desc:expr, satisfies: [$($sat:ident),+ $(,)?],
+     depends_on: [$($dep:ident),+ $(,)?],
+     labels: [$($label:expr),+ $(,)?], run: $run:expr $(,)?) => {
+        $crate::__internals::register_task({
+            let mut __t = $crate::Task::new($name).description($desc);
             $(__t = __t.satisfies(stringify!($sat));)+
             $(__t = __t.depends_on(stringify!($dep));)+
             $(__t = __t.label($label);)+

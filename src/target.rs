@@ -13,6 +13,7 @@ pub type CheckFn = Arc<dyn Fn() -> anyhow::Result<bool> + Send + Sync>;
 #[derive(Clone)]
 pub struct Target {
     pub name: String,
+    pub description: Option<String>,
     pub check: Option<CheckFn>,
     pub depends_on: Vec<String>,
 }
@@ -22,6 +23,7 @@ impl Target {
     pub fn new(name: impl Into<String>) -> Self {
         Target {
             name: name.into(),
+            description: None,
             check: None,
             depends_on: Vec::new(),
         }
@@ -36,6 +38,15 @@ impl Target {
         F: Fn() -> anyhow::Result<bool> + Send + Sync + 'static,
     {
         self.check = Some(Arc::new(f));
+        self
+    }
+
+    /// Attach a human-readable description of this target.
+    ///
+    /// Shown always when the target is unsatisfied, and optionally in
+    /// dim text when `--show-descriptions` is passed.
+    pub fn description(mut self, text: impl Into<String>) -> Self {
+        self.description = Some(text.into());
         self
     }
 

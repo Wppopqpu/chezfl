@@ -70,4 +70,9 @@ Both produce the same runtime model. Users compile their config into a binary an
 - `./my-config check [target...]` — check targets (default all), report satisfaction state
 - `./my-config plan` — dry-run: simulate task execution (assume satisfied after) without side effects, output in text-tree format
 - `./my-config check --label foo --exclude-label bar` — filter targets by task labels
+- `./my-config --show-descriptions` — show target descriptions in dim text (always shown for unsatisfied targets)
+
+**Description**:
+An optional human-readable string attached to a target or task via `.description("text")`. Descriptions are always displayed when a target is unsatisfied; for satisfied targets they are shown only with `--show-descriptions`. Both builder API and macros support `.description(...)`.
+
 *Avoid*: Config file, config language, DSL

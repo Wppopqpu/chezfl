@@ -7,14 +7,18 @@
 use chezfl::{cmd::cmd, target, task, run, tools::yay};
 
 fn main() -> anyhow::Result<()> {
-    target!("network");
+    target!("network",
+        description: "Network is reachable",
+    );
 
     target!("rg_installed",
+        description: "ripgrep (rg) is installed",
         check: || yay::is_installed("ripgrep"),
         depends_on: [network],
     );
 
     target!("dotfiles_repo",
+        description: "dotfiles repo is cloned to /home/user/.dotfiles",
         check: || {
             let ok = cmd("test")
                 .args(&["-d", "/home/user/.dotfiles"])
@@ -26,6 +30,7 @@ fn main() -> anyhow::Result<()> {
     );
 
     task!("install_rg",
+        description: "Install ripgrep via yay",
         satisfies: [rg_installed],
         depends_on: [network],
         labels: ["install"],
@@ -36,6 +41,7 @@ fn main() -> anyhow::Result<()> {
     );
 
     task!("clone_dotfiles",
+        description: "Clone dotfiles repo from GitHub",
         satisfies: [dotfiles_repo],
         depends_on: [network],
         labels: ["clone"],

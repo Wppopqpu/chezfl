@@ -31,6 +31,10 @@ pub struct Cli {
     /// Re-check a target (clear cached state)
     #[arg(long, global = true, value_name = "TARGET")]
     pub recheck: Vec<String>,
+
+    /// Show target descriptions (always shown for unsatisfied targets)
+    #[arg(long, global = true, default_value_t = false)]
+    pub show_descriptions: bool,
 }
 
 /// Available subcommands.

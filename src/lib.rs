@@ -31,6 +31,7 @@ pub enum Satisfaction {
 #[derive(Debug, Clone)]
 pub struct Step {
     pub name: String,
+    pub description: Option<String>,
     pub sat: Satisfaction,
     pub detail: String,
 }
@@ -89,25 +90,27 @@ pub fn run_cli(app: &mut App) -> anyhow::Result<()> {
         targets: Vec::new(),
     });
 
+    let show_desc = cli.show_descriptions;
+
     match &command {
         cli::Command::Check { targets } => {
             let steps = app.run_check(&config, targets);
-            print_steps(&steps, false);
+            print_steps(&steps, false, show_desc);
         }
         cli::Command::Plan { targets } => {
             let steps = app.run_plan(&config, targets);
-            print_steps(&steps, true);
+            print_steps(&steps, true, show_desc);
         }
         cli::Command::Apply { targets } => {
             let steps = app.run_apply(&config, targets);
-            print_steps(&steps, false);
+            print_steps(&steps, false, show_desc);
         }
     }
 
     Ok(())
 }
 
-fn print_steps(steps: &[Step], is_plan: bool) {
+fn print_steps(steps: &[Step], is_plan: bool, show_descriptions: bool) {
     use std::io::IsTerminal;
 
     let color = std::io::stdout().is_terminal();
@@ -129,11 +132,17 @@ fn print_steps(steps: &[Step], is_plan: bool) {
         } else {
             format!("  {}", dim(&format!("({})", step.detail)))
         };
+        let desc = match &step.description {
+            Some(d) if show_descriptions || step.sat == crate::Satisfaction::Unsatisfied => {
+                format!("  {}", dim(d))
+            }
+            _ => String::new(),
+        };
         let prefix = if is_plan {
             format!("{} ", yellow("(P)"))
         } else {
             String::new()
         };
-        println!("{}{} {}{}", prefix, icon, name, detail);
+        println!("{}{} {}{}{}", prefix, icon, name, desc, detail);
     }
 }

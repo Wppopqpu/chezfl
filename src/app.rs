@@ -187,11 +187,7 @@ impl App {
             let target = &self.targets[name];
             let (sat, detail, _from_cache) = self.eval_target(target, &results);
             self.state.set_check_result(name, sat == Satisfaction::Satisfied);
-            steps.push(Step {
-                name: name.clone(),
-                sat,
-                detail: detail.clone(),
-            });
+            steps.push(self.mk_step(name, sat, detail.clone()));
             results.insert(name, sat);
         }
 
@@ -223,11 +219,7 @@ impl App {
 
         for name in &order {
             if blocked.contains(name.as_str()) {
-                steps.push(Step {
-                    name: name.clone(),
-                    sat: Satisfaction::Unsatisfied,
-                    detail: "(skipped, upstream failure)".to_string(),
-                });
+                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, "(skipped, upstream failure)".to_string()));
                 continue;
             }
 
@@ -237,11 +229,7 @@ impl App {
             let (cur_sat, cur_detail, _from_cache) = self.eval_target(target, &sat_map);
             if cur_sat == Satisfaction::Satisfied {
                 self.state.set_check_result(name, true);
-                steps.push(Step {
-                    name: name.clone(),
-                    sat: cur_sat,
-                    detail: cur_detail.clone(),
-                });
+                steps.push(self.mk_step(name, cur_sat, cur_detail.clone()));
                 sat_map.insert(name, cur_sat);
                 continue;
             }
@@ -249,21 +237,13 @@ impl App {
             // Find satisfying task
             let Some(task) = self.tasks.values().find(|t| t.satisfies.contains(name)) else {
                 sat_map.insert(name, Satisfaction::Unsatisfied);
-                steps.push(Step {
-                    name: name.clone(),
-                    sat: Satisfaction::Unsatisfied,
-                    detail: cur_detail,
-                });
+                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, cur_detail));
                 continue;
             };
 
             if self.is_task_disabled(task, config) {
                 sat_map.insert(name, Satisfaction::Unsatisfied);
-                steps.push(Step {
-                    name: name.clone(),
-                    sat: Satisfaction::Unsatisfied,
-                    detail: "(task disabled by label filter)".to_string(),
-                });
+                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, "(task disabled by label filter)".to_string()));
                 continue;
             }
 
@@ -274,11 +254,7 @@ impl App {
                 .all(|dep| sat_map.get(dep.as_str()) == Some(&Satisfaction::Satisfied));
             if !task_deps_ok {
                 sat_map.insert(name, Satisfaction::Unsatisfied);
-                steps.push(Step {
-                    name: name.clone(),
-                    sat: Satisfaction::Unsatisfied,
-                    detail: "(task deps not satisfied)".to_string(),
-                });
+                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, "(task deps not satisfied)".to_string()));
                 for sat in &task.satisfies {
                     blocked.insert(sat);
                 }
@@ -296,21 +272,13 @@ impl App {
                 if let Some(sat_target) = self.targets.get(sat_name.as_str()) {
                     if ran_ok {
                         let (rsat, rdetail, _from_cache) = self.eval_target(sat_target, &sat_map);
-                        steps.push(Step {
-                            name: sat_name.clone(),
-                            sat: rsat,
-                            detail: rdetail.clone(),
-                        });
+                        steps.push(self.mk_step(sat_name, rsat, rdetail.clone()));
                         sat_map.insert(sat_name, rsat);
                         self.state
                             .set_check_result(sat_name, rsat == Satisfaction::Satisfied);
                     } else {
                         sat_map.insert(sat_name, Satisfaction::Unsatisfied);
-                        steps.push(Step {
-                            name: sat_name.clone(),
-                            sat: Satisfaction::Unsatisfied,
-                            detail: "(task failed)".to_string(),
-                        });
+                        steps.push(self.mk_step(sat_name, Satisfaction::Unsatisfied, "(task failed)".to_string()));
                         self.state.set_check_result(sat_name, false);
                         blocked.insert(sat_name);
                     }
@@ -342,33 +310,21 @@ impl App {
 
         for name in &order {
             if blocked.contains(name.as_str()) {
-                steps.push(Step {
-                    name: name.clone(),
-                    sat: Satisfaction::Unsatisfied,
-                    detail: "(would be skipped, upstream failure)".to_string(),
-                });
+                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, "(would be skipped, upstream failure)".to_string()));
                 continue;
             }
 
             // If this target would already be satisfied by a previous task, skip
             if would_satisfy.contains(name.as_str()) {
                 sat_map.insert(name, Satisfaction::Satisfied);
-                steps.push(Step {
-                    name: name.clone(),
-                    sat: Satisfaction::Satisfied,
-                    detail: "(would be satisfied by task)".to_string(),
-                });
+                steps.push(self.mk_step(name, Satisfaction::Satisfied, "(would be satisfied by task)".to_string()));
                 continue;
             }
 
             let target = &self.targets[name];
             let (cur_sat, cur_detail) = self.eval_target_plan(target, &sat_map, &would_satisfy);
             if cur_sat == Satisfaction::Satisfied {
-                steps.push(Step {
-                    name: name.clone(),
-                    sat: cur_sat,
-                    detail: cur_detail.clone(),
-                });
+                steps.push(self.mk_step(name, cur_sat, cur_detail.clone()));
                 sat_map.insert(name, cur_sat);
                 continue;
             }
@@ -376,21 +332,13 @@ impl App {
             // Find task
             let Some(task) = self.tasks.values().find(|t| t.satisfies.contains(name)) else {
                 sat_map.insert(name, Satisfaction::Unsatisfied);
-                steps.push(Step {
-                    name: name.clone(),
-                    sat: Satisfaction::Unsatisfied,
-                    detail: cur_detail,
-                });
+                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, cur_detail));
                 continue;
             };
 
             if self.is_task_disabled(task, config) {
                 sat_map.insert(name, Satisfaction::Unsatisfied);
-                steps.push(Step {
-                    name: name.clone(),
-                    sat: Satisfaction::Unsatisfied,
-                    detail: "(task disabled by label filter)".to_string(),
-                });
+                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, "(task disabled by label filter)".to_string()));
                 continue;
             }
 
@@ -401,11 +349,7 @@ impl App {
             });
             if !task_deps_ok {
                 sat_map.insert(name, Satisfaction::Unsatisfied);
-                steps.push(Step {
-                    name: name.clone(),
-                    sat: Satisfaction::Unsatisfied,
-                    detail: "(task deps not satisfied)".to_string(),
-                });
+                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, "(task deps not satisfied)".to_string()));
                 for sat in &task.satisfies {
                     blocked.insert(sat);
                 }
@@ -416,11 +360,7 @@ impl App {
             for sat_name in &task.satisfies {
                 would_satisfy.insert(sat_name);
                 sat_map.insert(sat_name, Satisfaction::Satisfied);
-                steps.push(Step {
-                    name: sat_name.clone(),
-                    sat: Satisfaction::Satisfied,
-                    detail: "(would be satisfied by task)".to_string(),
-                });
+                steps.push(self.mk_step(sat_name, Satisfaction::Satisfied, "(would be satisfied by task)".to_string()));
             }
         }
 
@@ -570,6 +510,11 @@ impl App {
                 )
             }
         }
+    }
+
+    fn mk_step(&self, name: &str, sat: Satisfaction, detail: String) -> Step {
+        let description = self.targets.get(name).and_then(|t| t.description.clone());
+        Step { name: name.to_string(), description, sat, detail }
     }
 
     fn is_task_disabled(&self, task: &Task, config: &Config) -> bool {

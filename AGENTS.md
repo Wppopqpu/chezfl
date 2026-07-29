@@ -31,6 +31,7 @@ cargo clippy -- -D warnings  # lint (run after fmt)
 - **Target** — a concrete desired state with a `check` function. Two kinds: leaf (has check) and aggregate (satisfaction from deps). Each target is satisfied by exactly one task. Targets form an acyclic dependency DAG.
 - **Task** — satisfies 1+ targets, depends on targets (not tasks), has labels for filtering. Serial execution, idempotent, stdin-forwarded. No rollback.
 - **State** — persisted in TOML (`~/.local/state/chezfl/state.toml`). Supports manual override via `--set`/`--unset`/`--recheck`. Check caching: leaf targets skip check when previously satisfied + deps unchanged.
-- **CLI** — `./my-config [apply]`, `./my-config check [target...]`, `./my-config plan`. Supports `--label`, `--exclude-label`.
+- **Description** — optional human-readable string on targets and tasks via `.description("text")`. Shown always for unsatisfied targets; opt-in via `--show-descriptions` flag.
+- **CLI** — `./my-config [apply]`, `./my-config check [target...]`, `./my-config plan`. Supports `--label`, `--exclude-label`, `--show-descriptions`.
 - **API** — supports both App builder and global macros.
 - **ADR-0001** — Configuration as Rust Code, not a DSL.

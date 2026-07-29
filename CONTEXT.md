@@ -45,7 +45,14 @@ There is no rollback or uninstall support. Teardown is the user's responsibility
 *Avoid*: Job, script
 
 **State file**:
-chezfl persists target satisfaction state to a TOML file (default: `~/.local/state/chezfl/state.toml`). Each target stores whether it was last seen as satisfied, when it was checked, and whether it was manually overridden. On `check`, chezfl reads cached state first; on `apply`, it re-checks only targets whose upstream dependencies have changed or that are explicitly rechecked.
+chezfl persists target satisfaction state to a TOML file (default: `~/.local/state/chezfl/state.toml`). Each target stores whether it was last seen as satisfied (`satisfied`), when it was checked (`checked_at`), and whether it was manually overridden (`manually_set`).
+
+On `check` and `apply`, chezfl uses the following logic:
+- **Manual override** (`manually_set = true`): skip the check function entirely, return the manual value.
+- **Leaf target with cached satisfied state** (`satisfied = true`): skip the check function if all dependencies are still satisfied in the current run. Return "(cached)".
+- **All other cases**: run the check function. After the check, persist the result to the state file.
+
+Aggregate targets are never cached — their satisfaction is always derived from their current dependencies' satisfaction. Writing state happens after every leaf-target check (not just after tasks run), ensuring the cache stays fresh.
 
 **Manual override**:
 Users can set or unset a target's satisfaction via CLI: `--set <target>=satisfied`, `--unset <target>`, `--recheck <target>`. Manually set targets skip their check function until explicitly rechecked.

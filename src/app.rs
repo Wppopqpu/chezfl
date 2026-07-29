@@ -172,19 +172,21 @@ impl App {
     ///
     /// Runs the `check` function of each relevant target (or evaluates
     /// aggregate targets from their dependencies) and returns a topological
-    /// list of results. No tasks are executed.
+    /// list of results. Cached results are used when a leaf target was
+    /// previously satisfied and its dependencies are unchanged.
     ///
     /// If `names` is empty, all registered targets are checked.
     /// Otherwise only the named targets (and their transitive dependencies)
     /// are included.
-    pub fn run_check(&self, _config: &Config, names: &[String]) -> Vec<Step> {
+    pub fn run_check(&mut self, _config: &Config, names: &[String]) -> Vec<Step> {
         let order = self.topo_order(names);
         let mut results: HashMap<&str, Satisfaction> = HashMap::new();
         let mut steps = Vec::new();
 
         for name in &order {
             let target = &self.targets[name];
-            let (sat, detail) = self.eval_target(target, &results);
+            let (sat, detail, _from_cache) = self.eval_target(target, &results);
+            self.state.set_check_result(name, sat == Satisfaction::Satisfied);
             steps.push(Step {
                 name: name.clone(),
                 sat,
@@ -193,6 +195,9 @@ impl App {
             results.insert(name, sat);
         }
 
+        if let Some(path) = &self.state_path {
+            let _ = self.state.save_to(path);
+        }
         steps
     }
 
@@ -229,8 +234,9 @@ impl App {
             let target = &self.targets[name];
 
             // Check
-            let (cur_sat, cur_detail) = self.eval_target(target, &sat_map);
+            let (cur_sat, cur_detail, _from_cache) = self.eval_target(target, &sat_map);
             if cur_sat == Satisfaction::Satisfied {
+                self.state.set_check_result(name, true);
                 steps.push(Step {
                     name: name.clone(),
                     sat: cur_sat,
@@ -289,7 +295,7 @@ impl App {
             for sat_name in &task.satisfies {
                 if let Some(sat_target) = self.targets.get(sat_name.as_str()) {
                     if ran_ok {
-                        let (rsat, rdetail) = self.eval_target(sat_target, &sat_map);
+                        let (rsat, rdetail, _from_cache) = self.eval_target(sat_target, &sat_map);
                         steps.push(Step {
                             name: sat_name.clone(),
                             sat: rsat,
@@ -491,22 +497,34 @@ impl App {
         &self,
         target: &Target,
         deps_sat: &HashMap<&str, Satisfaction>,
-    ) -> (Satisfaction, String) {
+    ) -> (Satisfaction, String, bool) {
         // Check manual override in state
         if let Some(ts) = self.state.get(&target.name)
             && ts.manually_set
         {
-            return match ts.satisfied {
-                Some(true) => (Satisfaction::Satisfied, "(manually set)".to_string()),
-                _ => (Satisfaction::Unsatisfied, "(manually unset)".to_string()),
+            let sat = match ts.satisfied {
+                Some(true) => Satisfaction::Satisfied,
+                _ => Satisfaction::Unsatisfied,
             };
+            let detail = if sat == Satisfaction::Satisfied { "(manually set)" } else { "(manually unset)" };
+            return (sat, detail.to_string(), false);
         }
 
         if let Some(check) = &target.check {
+            // Leaf target: use cached result if previously satisfied and deps unchanged
+            if let Some(ts) = self.state.get(&target.name)
+                && ts.satisfied == Some(true)
+            {
+                let deps_ok = target.depends_on.iter()
+                    .all(|dep| deps_sat.get(dep.as_str()) == Some(&Satisfaction::Satisfied));
+                if deps_ok {
+                    return (Satisfaction::Satisfied, "(cached)".to_string(), true);
+                }
+            }
             match check() {
-                Ok(true) => (Satisfaction::Satisfied, "".to_string()),
-                Ok(false) => (Satisfaction::Unsatisfied, "".to_string()),
-                Err(e) => (Satisfaction::Unsatisfied, format!("check error: {e}")),
+                Ok(true) => (Satisfaction::Satisfied, "".to_string(), false),
+                Ok(false) => (Satisfaction::Unsatisfied, "".to_string(), false),
+                Err(e) => (Satisfaction::Unsatisfied, format!("check error: {e}"), false),
             }
         } else {
             // Aggregate
@@ -515,11 +533,12 @@ impl App {
                 .iter()
                 .all(|dep| deps_sat.get(dep.as_str()) == Some(&Satisfaction::Satisfied));
             if all_ok {
-                (Satisfaction::Satisfied, "(aggregate)".to_string())
+                (Satisfaction::Satisfied, "(aggregate)".to_string(), false)
             } else {
                 (
                     Satisfaction::Unsatisfied,
                     "(aggregate, deps unsatisfied)".to_string(),
+                    false,
                 )
             }
         }
@@ -608,5 +627,114 @@ impl App {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tracked_check() -> (std::sync::Arc<std::sync::atomic::AtomicBool>, Target) {
+        let called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let c = called.clone();
+        let t = Target::new("leaf").check(move || {
+            c.store(true, std::sync::atomic::Ordering::SeqCst);
+            anyhow::Ok(true)
+        });
+        (called, t)
+    }
+
+    fn make_config() -> Config {
+        Config::default()
+    }
+
+    #[test]
+    fn test_cache_hit_skips_check() {
+        let mut app = App::new();
+        let (called, t) = tracked_check();
+        app.target(t);
+        app.validate().unwrap();
+
+        // Pre-populate state as satisfied (simulating a previous run)
+        app.state
+            .set_check_result("leaf", true);
+
+        let steps = app.run_check(&make_config(), &[]);
+        assert_eq!(steps[0].sat, Satisfaction::Satisfied);
+        assert!(steps[0].detail.contains("cached"));
+        assert!(!called.load(std::sync::atomic::Ordering::SeqCst),
+            "check should not have been called");
+    }
+
+    #[test]
+    fn test_cache_miss_dep_changed_runs_check() {
+        let mut app = App::new();
+        let (called, t) = tracked_check();
+        app.target(Target::new("dep").check(|| Ok(false)));
+        app.target(t.depends_on("dep"));
+        app.validate().unwrap();
+
+        // Pre-populate as satisfied
+        app.state.set_check_result("leaf", true);
+
+        let steps = app.run_check(&make_config(), &[]);
+        // "dep" is unsatisfied → "leaf" cache is invalidated
+        assert_eq!(steps[0].sat, Satisfaction::Unsatisfied);
+        assert!(called.load(std::sync::atomic::Ordering::SeqCst),
+            "check should have been called because dep changed");
+    }
+
+    #[test]
+    fn test_cache_miss_previously_unsatisfied_runs_check() {
+        let mut app = App::new();
+        let (called, t) = tracked_check();
+        app.target(t);
+        app.validate().unwrap();
+
+        // Pre-populate as unsatisfied
+        app.state.set_check_result("leaf", false);
+
+        let steps = app.run_check(&make_config(), &[]);
+        assert_eq!(steps[0].sat, Satisfaction::Satisfied);
+        assert!(called.load(std::sync::atomic::Ordering::SeqCst),
+            "check should have been called because previous state was unsatisfied");
+    }
+
+    #[test]
+    fn test_aggregate_never_cached() {
+        let mut app = App::new();
+        let (_called, t) = tracked_check();
+        app.target(Target::new("dep").check(|| Ok(true)));
+        app.target(t.depends_on("dep"));
+        app.target(Target::new("agg").depends_on("leaf"));
+        app.validate().unwrap();
+
+        app.state.set_check_result("leaf", true);
+
+        let steps = app.run_check(&make_config(), &[]);
+        assert_eq!(steps[2].sat, Satisfaction::Satisfied);
+        assert!(steps[2].detail.contains("aggregate"),
+            "aggregate should show aggregate detail, not cached");
+    }
+
+    #[test]
+    fn test_apply_writes_state_and_caches_next_check() {
+        let mut app = App::new();
+        let (check_called, t) = tracked_check();
+        app.target(t);
+        app.task(Task::new("task").satisfies("leaf").run(|| Ok(())));
+        app.validate().unwrap();
+
+        // First apply — check runs, task runs, re-check runs
+        let steps = app.run_apply(&make_config(), &[]);
+        assert_eq!(steps[0].sat, Satisfaction::Satisfied);
+        assert!(check_called.load(std::sync::atomic::Ordering::SeqCst));
+
+        // Reset tracker, check again — should use cache now
+        check_called.store(false, std::sync::atomic::Ordering::SeqCst);
+        let steps2 = app.run_check(&make_config(), &[]);
+        assert_eq!(steps2[0].sat, Satisfaction::Satisfied);
+        assert!(steps2[0].detail.contains("cached"));
+        assert!(!check_called.load(std::sync::atomic::Ordering::SeqCst));
     }
 }

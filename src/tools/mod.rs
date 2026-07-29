@@ -1,10 +1,16 @@
-/// Built-in tool wrappers for common programs.
+/// Built-in tool wrappers for common programs and filesystem operations.
 ///
-/// Each module contains free functions that call [`Cmd`](crate::cmd::Cmd)
-/// internally. Designed for use inside [`Task`](crate::Task) `run` closures.
+/// Program-based modules call [`Cmd`](crate::cmd::Cmd) internally.
+/// Filesystem tools ([`fs`]) use `std::fs` directly.
+///
+/// Designed for use inside [`Task`](crate::Task) `run` closures and
+/// [`Target`](crate::Target) `check` functions.
 ///
 /// Available tools:
 /// - [`git`] — clone, pull, fetch, status
 /// - [`yay`] — install, remove, update, is_installed
+/// - [`fs`] — file predicates (is_file, is_dir, exists) and operations
+///   (read, write, copy, remove, symlink)
+pub mod fs;
 pub mod git;
 pub mod yay;

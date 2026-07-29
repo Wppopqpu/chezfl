@@ -19,6 +19,19 @@ Targets are **concrete** — one target = one specific desired state. Users crea
 *Examples*: "package ripgrep is installed", "repo ~/src/chezfl is cloned and built", "service nginx is running".
 *Avoid*: Config entry, setting, value
 
+**Cmd**:
+A command runner building on `std::process::Command`. Two execution modes:
+- **`run()`** — captures stdout/stderr into a `Output { status, stdout, stderr }` struct, stdin is null.
+- **`exec()`** — inherits stdin/stdout/stderr from the parent (fully interactive), returns `Output` with only `status` populated.
+
+Both return `anyhow::Result<Output>`. Supports `.timeout(Duration)` and `.retry(n)`.
+Available as a builder (`cmd("git").arg("clone").exec()`) or a one-shot function (`run_cmd("git", &["clone", url])`).
+
+**Tool**:
+A convenience wrapper function that uses `Cmd` internally. Organized by program name under `chezfl::tools::*` (e.g., `tools::git::clone`, `tools::yay::install`).
+Tools are designed to be called inside a Task's `run` closure — they are helpers for the *how*, not the *what*.
+*Avoid*: Plugin, extension
+
 **Task**:
 An actionable unit that **satisfies one or more targets** (1-to-many). A task declares which targets it satisfies and which other targets must be satisfied before it can run. A task does NOT depend on other tasks — only on targets.
 

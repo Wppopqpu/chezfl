@@ -4,13 +4,16 @@
 pub mod __internals;
 pub mod app;
 pub mod cli;
+pub mod cmd;
 #[macro_use]
 pub mod macros;
 pub mod state;
 pub mod target;
 pub mod task;
+pub mod tools;
 
 pub use app::{App, Config};
+pub use cmd::{cmd, run_cmd, Cmd, Output as CmdOutput};
 use clap::Parser;
 pub use target::Target;
 pub use task::Task;

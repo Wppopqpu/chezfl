@@ -165,6 +165,29 @@ let out = git::status("/home/user/src/repo")?;
 let clean = git::is_clean("/home/user/src/repo")?;
 ```
 
+## Examples
+
+The `examples/` directory contains ready-to-run config templates:
+
+| Example | API | Focus |
+|---------|-----|-------|
+| [`examples/desktop.rs`](examples/desktop.rs) | Builder | yay + git tools, multi-target dependency graph |
+| [`examples/laptop.rs`](examples/laptop.rs) | Macro | concise config using `target!`/`task!`/`run!` |
+| [`examples/cmd_demo.rs`](examples/cmd_demo.rs) | Builder | Cmd API features: run, exec, timeout, retry, env, dir |
+
+```bash
+# Run the desktop config (try check first, then apply)
+cargo run --example desktop check
+cargo run --example desktop plan
+cargo run --example desktop apply
+
+# Run the laptop config
+cargo run --example laptop check
+
+# Run the Cmd API demo
+cargo run --example cmd_demo
+```
+
 ## CLI Reference
 
 ```

@@ -93,16 +93,14 @@ See [`examples/laptop.rs`](examples/laptop.rs) for the full macro-API example.
 ### Build and run
 
 ```bash
+# Default binary is my_config (set in Cargo.toml)
+cargo run -- check          # check all targets
+cargo run -- plan           # plan (dry-run)
+cargo run                   # apply (default subcommand)
+
+# Or build once and use the binary directly
 cargo build --release
-
-# Show current state (no side effects)
-./target/release/my-config check
-
-# Show what *would* happen
-./target/release/my-config plan
-
-# Converge: check → run tasks → re-check
-./target/release/my-config apply
+./target/release/my_config check
 ```
 
 ## Workflow: keep your config in sync with chezfl
@@ -223,7 +221,7 @@ cargo run --example cmd_demo
 ## CLI Reference
 
 ```
-Usage: my-config [COMMAND]
+Usage: my_config [COMMAND]
 
 Commands:
   check   Check target satisfaction (no side effects)
@@ -242,22 +240,22 @@ Flags (every command):
 
 ```bash
 # Check all targets
-./my-config check
+cargo run -- check
 
 # Check only specific targets (includes transitive deps)
-./my-config check rg_installed
+cargo run -- check rg_installed
 
 # Only run "install" labelled tasks
-./my-config apply --label install
+cargo run -- apply --label install
 
 # Skip "system" labelled tasks
-./my-config apply --exclude-label system
+cargo run -- apply --exclude-label system
 
 # Manually mark a target as satisfied
-./my-config check --set docker_installed=true
+cargo run -- check --set docker_installed=true
 
 # Force re-check
-./my-config check --recheck docker_installed
+cargo run -- check --recheck docker_installed
 ```
 
 ## Domain Model
@@ -288,7 +286,7 @@ A **Task** is an actionable unit that satisfies 1+ targets.
 
 ## Conventions
 
-- `src/lib.rs` — library root; `src/main.rs` — CLI binary (thin, delegates to lib)
+- `src/lib.rs` — library root; `src/bin/my_config.rs` — user's personal config binary
 - Tests live in `tests/` (integration) and inline `#[cfg(test)] mod tests` (unit)
 - `anyhow` for error handling; `thiserror` for library errors
 - Public API goes through lib; main only parses CLI args and calls lib

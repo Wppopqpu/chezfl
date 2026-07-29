@@ -21,7 +21,7 @@ cargo clippy -- -D warnings  # lint (run after fmt)
 
 ## Conventions
 
-- `src/lib.rs` — library root; `src/main.rs` — CLI binary (thin, delegates to lib)
+- `src/lib.rs` — library root; `src/bin/my_config.rs` — user's personal config binary (default-run)
 - Tests live in `tests/` (integration) and inline `#[cfg(test)] mod tests` (unit)
 - Use `anyhow` for error handling; `thiserror` for library errors
 - Public API goes through lib; main only parses CLI args and calls lib

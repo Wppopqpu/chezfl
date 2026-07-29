@@ -1,12 +1,8 @@
 use chezfl::Config;
 
-fn clear_global() {
-    let _ = chezfl::__internals::take_app();
-}
-
 #[test]
 fn test_macro_basic_check() {
-    clear_global();
+    let _setup = chezfl::__internals::TestSetup::new();
 
     chezfl::target!("base");
     chezfl::target!("ready", check: || Ok(true), depends_on: [base]);
@@ -24,7 +20,8 @@ fn test_macro_basic_check() {
 
 #[test]
 fn test_macro_apply() {
-    clear_global();
+    let _setup = chezfl::__internals::TestSetup::new();
+
     chezfl::target!("leaf", check: || Ok(false));
     chezfl::task!("fix", satisfies: [leaf], run: || Ok(()));
 
@@ -40,7 +37,7 @@ fn test_macro_apply() {
 
 #[test]
 fn test_macro_full() {
-    clear_global();
+    let _setup = chezfl::__internals::TestSetup::new();
 
     chezfl::target!("net");
     chezfl::target!("pkgs", depends_on: [net]);

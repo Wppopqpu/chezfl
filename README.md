@@ -37,32 +37,23 @@ fn main() -> anyhow::Result<()> {
 
     app.target(
         Target::new("rg_installed")
-            .check(|| {
-                Ok(std::process::Command::new("which")
-                    .arg("rg")
-                    .status()?
-                    .success())
-            })
-            .depends_on("apt_ready"),
+            .check(|| chezfl::tools::yay::is_installed("ripgrep"))
+            .depends_on("network"),
     );
 
     app.task(
         Task::new("install_rg")
             .satisfies("rg_installed")
-            .depends_on("apt_ready")
+            .depends_on("network")
             .label("install")
             .run(|| {
-                // Idempotent — safe to run again
-                std::process::Command::new("sudo")
-                    .args(["pacman", "-S", "--noconfirm", "ripgrep"])
-                    .status()?;
+                chezfl::tools::yay::install(&["ripgrep"])?;
                 Ok(())
             }),
     );
 
-    app.target(Target::new("apt_ready")); // aggregate — satisfied when deps are
+    app.target(Target::new("network")); // aggregate target
 
-    // Parse CLI args and dispatch
     run_cli(&mut app)
 }
 ```
@@ -73,21 +64,19 @@ fn main() -> anyhow::Result<()> {
 use chezfl::{target, task, run};
 
 fn main() -> anyhow::Result<()> {
-    target!("apt_ready");
+    target!("network");
 
     target!("rg_installed",
-        check: || Ok(std::process::Command::new("which").arg("rg").status()?.success()),
-        depends_on: [apt_ready],
+        check: || chezfl::tools::yay::is_installed("ripgrep"),
+        depends_on: [network],
     );
 
     task!("install_rg",
         satisfies: [rg_installed],
-        depends_on: [apt_ready],
+        depends_on: [network],
         labels: ["install"],
         run: || {
-            std::process::Command::new("sudo")
-                .args(["pacman", "-S", "--noconfirm", "ripgrep"])
-                .status()?;
+            chezfl::tools::yay::install(&["ripgrep"])?;
             Ok(())
         },
     );
@@ -109,6 +98,70 @@ cargo build --release
 
 # Converge: check → run tasks → re-check
 ./target/release/my-config apply
+```
+
+## Cmd API (running commands)
+
+chezfl provides [`Cmd`](https://docs.rs/chezfl/latest/chezfl/cmd/struct.Cmd.html)
+for running external programs — a wrapper around `std::process::Command` with
+timeout and retry support.
+
+Two execution modes:
+
+| Method | stdin | stdout/stderr | Use case |
+|--------|-------|---------------|----------|
+| `run()` | null | captured | Check if a program is installed, read git status |
+| `exec()` | inherit | inherit | Interactive commands (yay, sudo, git clone) |
+
+```rust
+use chezfl::cmd::{cmd, run_cmd};
+
+// Quick one-shot (captured)
+let out = run_cmd("which", &["rg"])?;
+
+// Builder with capture
+let out = cmd("git")
+    .args(&["-C", "/home/user/src/foo"])
+    .args(&["status", "--porcelain"])
+    .run()?;
+
+// Interactive (sudo prompts forwarded to terminal)
+cmd("sudo").args(&["pacman", "-Syu"]).exec()?;
+
+// With timeout and retry
+let out = cmd("ping")
+    .arg("-c").arg("1").arg("10.0.0.1")
+    .timeout(std::time::Duration::from_secs(5))
+    .retry(2)
+    .run()?;
+```
+
+## Built-in tools
+
+chezfl ships with convenience wrappers for common programs in
+[`chezfl::tools`](https://docs.rs/chezfl/latest/chezfl/tools/index.html):
+
+### `tools::yay`
+
+```rust
+use chezfl::tools::yay;
+
+yay::install(&["ripgrep", "fd"])?;   // yay -S --noconfirm
+yay::remove(&["firefox"])?;           // yay -R --noconfirm
+yay::update()?;                       // yay -Syu --noconfirm
+let installed = yay::is_installed("ripgrep")?;
+```
+
+### `tools::git`
+
+```rust
+use chezfl::tools::git;
+
+git::clone("https://github.com/user/repo", "/home/user/src/repo")?;
+git::pull("/home/user/src/repo")?;
+git::fetch("/home/user/src/repo")?;
+let out = git::status("/home/user/src/repo")?;
+let clean = git::is_clean("/home/user/src/repo")?;
 ```
 
 ## CLI Reference

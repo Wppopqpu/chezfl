@@ -69,11 +69,11 @@ chezfl supports two API styles:
 
 Both produce the same runtime model. Users compile their config into a binary and run subcommands:
 
-- `./my-config [apply]` — default: check all targets, run tasks for unsatisfied ones, re-check after each task
-- `./my-config check [target...]` — check targets (default all), report satisfaction state
-- `./my-config plan` — dry-run: simulate task execution (assume satisfied after) without side effects, output in text-tree format
-- `./my-config check --label foo --exclude-label bar` — filter targets by task labels
-- `./my-config --show-descriptions` — show target descriptions (always shown for unsatisfied targets, styled as **red strikethrough**; satisfied descriptions shown in dim text)
+- `./chezfl [apply]` — default: check all targets, run tasks for unsatisfied ones, re-check after each task
+- `./chezfl check [target...]` — check targets (default all), report satisfaction state
+- `./chezfl plan` — dry-run: simulate task execution (assume satisfied after) without side effects, output in text-tree format
+- `./chezfl check --label foo --exclude-label bar` — filter targets by task labels
+- `./chezfl --show-descriptions` — show target descriptions (always shown for unsatisfied targets, styled as **red strikethrough**; satisfied descriptions shown in dim text)
 
 **Description**:
 An optional human-readable string attached to a target or task via `.description("text")`. Descriptions are always displayed when a target is unsatisfied; for satisfied targets they are shown only with `--show-descriptions`. Both builder API and macros support `.description(...)`.

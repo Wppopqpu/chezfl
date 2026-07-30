@@ -25,9 +25,9 @@ cd chezfl
 git checkout -b my-config        # your personal config branch
 ```
 
-### Write your config (`src/bin/my_config.rs`)
+### Write your config (`src/bin/chezfl.rs`)
 
-A ready-to-use template is provided at [`src/bin/my_config.rs`](src/bin/my_config.rs).
+A ready-to-use template is provided at [`src/bin/chezfl.rs`](src/bin/chezfl.rs).
 Uncomment and fill in your own targets and tasks:
 
 ```rust
@@ -93,14 +93,14 @@ See [`examples/laptop.rs`](examples/laptop.rs) for the full macro-API example.
 ### Build and run
 
 ```bash
-# Default binary is my_config (set in Cargo.toml)
+# Default binary is chezfl (set in Cargo.toml)
 cargo run -- check          # check all targets
 cargo run -- plan           # plan (dry-run)
 cargo run                   # apply (default subcommand)
 
 # Or build once and use the binary directly
 cargo build --release
-./target/release/my_config check
+./target/release/chezfl check
 ```
 
 ## Workflow: keep your config in sync with chezfl
@@ -110,7 +110,7 @@ keeps them separate:
 
 ```text
 main          — chezfl library source (receives upstream updates)
-my-config     — your branch: src/bin/my_config.rs + chezfl source
+my-config     — your branch: src/bin/chezfl.rs + chezfl source
 ```
 
 **When chezfl has upstream changes:**
@@ -126,7 +126,7 @@ git merge main                  # bring chezfl updates into your config
 polluted with your local targets, so `git merge main` is always clean on
 the config side.
 
-This approach works because `src/bin/my_config.rs` is gitignored from the
+This approach works because `src/bin/chezfl.rs` is gitignored from the
 upstream perspective — it only exists in your branch. The chezfl library
 sources (`src/lib.rs`, `src/app.rs`, …) are the same in both branches.
 
@@ -221,7 +221,7 @@ cargo run --example cmd_demo
 ## CLI Reference
 
 ```
-Usage: my_config [COMMAND]
+Usage: chezfl [COMMAND]
 
 Commands:
   check   Check target satisfaction (no side effects)
@@ -286,7 +286,7 @@ A **Task** is an actionable unit that satisfies 1+ targets.
 
 ## Conventions
 
-- `src/lib.rs` — library root; `src/bin/my_config.rs` — user's personal config binary
+- `src/lib.rs` — library root; `src/bin/chezfl.rs` — user's personal config binary
 - Tests live in `tests/` (integration) and inline `#[cfg(test)] mod tests` (unit)
 - `anyhow` for error handling; `thiserror` for library errors
 - Public API goes through lib; main only parses CLI args and calls lib

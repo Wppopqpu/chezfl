@@ -4,10 +4,12 @@ pub type CheckFn = Arc<dyn Fn() -> anyhow::Result<bool> + Send + Sync>;
 
 /// A declaration of a concrete desired state.
 ///
-/// There are two kinds:
-/// - **Leaf** — has a `check` function that probes the real system.
-/// - **Aggregate** — no check; its satisfaction is derived from its
+/// Three kinds:
+/// - **Leaf** — has a `check` function, optionally guarded by
+///   [`check_deps`](Target::check_dep).
+/// - **Aggregate** — no check; satisfaction derived from its
 ///   [`depends_on`](Target::depends_on) targets.
+/// - **Stub** — neither check nor depends_on.
 ///
 /// Each target must be satisfied by **exactly one** [`Task`](crate::Task).
 #[derive(Clone)]
@@ -16,6 +18,7 @@ pub struct Target {
     pub description: Option<String>,
     pub check: Option<CheckFn>,
     pub depends_on: Vec<String>,
+    pub check_deps: Vec<String>,
 }
 
 impl Target {
@@ -26,6 +29,7 @@ impl Target {
             description: None,
             check: None,
             depends_on: Vec::new(),
+            check_deps: Vec::new(),
         }
     }
 
@@ -57,6 +61,16 @@ impl Target {
     /// dependencies for ordering purposes.
     pub fn depends_on(mut self, target: impl Into<String>) -> Self {
         self.depends_on.push(target.into());
+        self
+    }
+
+    /// Declare a check dependency (by name).
+    ///
+    /// A leaf target's `check` only runs when **all** its check deps are
+    /// satisfied. If any check dep is unsatisfied the target is demoted
+    /// to stub — the check is skipped and no task runs for it.
+    pub fn check_dep(mut self, target: impl Into<String>) -> Self {
+        self.check_deps.push(target.into());
         self
     }
 

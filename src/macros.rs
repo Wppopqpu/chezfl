@@ -51,6 +51,39 @@ macro_rules! target {
             $crate::Target::new($name).description($desc).check($check),
         );
     };
+    // Leaf target with check + check_dep
+    ($name:expr, check: $check:expr, check_dep: [$($cdep:ident),* $(,)?] $(,)?) => {
+        $crate::__internals::register_target({
+            let mut __t = $crate::Target::new($name).check($check);
+            $(__t = __t.check_dep(stringify!($cdep));)*
+            __t
+        });
+    };
+    ($name:expr, description: $desc:expr, check: $check:expr, check_dep: [$($cdep:ident),* $(,)?] $(,)?) => {
+        $crate::__internals::register_target({
+            let mut __t = $crate::Target::new($name).description($desc).check($check);
+            $(__t = __t.check_dep(stringify!($cdep));)*
+            __t
+        });
+    };
+    // Leaf target with check + check_dep + depends_on
+    ($name:expr, check: $check:expr, check_dep: [$($cdep:ident),* $(,)?], depends_on: [$($dep:ident),* $(,)?] $(,)?) => {
+        $crate::__internals::register_target({
+            let mut __t = $crate::Target::new($name).check($check);
+            $(__t = __t.check_dep(stringify!($cdep));)*
+            $(__t = __t.depends_on(stringify!($dep));)*
+            __t
+        });
+    };
+    ($name:expr, description: $desc:expr, check: $check:expr, check_dep: [$($cdep:ident),* $(,)?], depends_on: [$($dep:ident),* $(,)?] $(,)?) => {
+        $crate::__internals::register_target({
+            let mut __t = $crate::Target::new($name).description($desc).check($check);
+            $(__t = __t.check_dep(stringify!($cdep));)*
+            $(__t = __t.depends_on(stringify!($dep));)*
+            __t
+        });
+    };
+    // Legacy: leaf with check + depends_on (no check_dep)
     ($name:expr, check: $check:expr, depends_on: [$($dep:ident),* $(,)?] $(,)?) => {
         $crate::__internals::register_target({
             let mut __t = $crate::Target::new($name).check($check);

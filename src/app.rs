@@ -161,6 +161,15 @@ impl App {
                     );
                 }
             }
+            for dep in &target.check_deps {
+                if !self.targets.contains_key(dep) {
+                    anyhow::bail!(
+                        "target '{}' has check dep on unknown target '{}'",
+                        target.name,
+                        dep
+                    );
+                }
+            }
         }
         for task in self.tasks.values() {
             for sat in &task.satisfies {
@@ -263,6 +272,13 @@ impl App {
                 continue;
             }
 
+            // Stub targets (structural or demoted) cannot be satisfied by tasks
+            if target.check.is_some() || target.is_stub() {
+                sat_map.insert(name, Satisfaction::Unsatisfied);
+                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, cur_detail));
+                continue;
+            }
+
             // Find satisfying task
             let Some(task) = self.tasks.values().find(|t| t.satisfies.contains(name)) else {
                 sat_map.insert(name, Satisfaction::Unsatisfied);
@@ -308,6 +324,20 @@ impl App {
             for sat_name in &task.satisfies {
                 if let Some(sat_target) = self.targets.get(sat_name.as_str()) {
                     if ran_ok {
+                        // Re-evaluate leaf dependencies first so aggregate targets
+                        // derive from up-to-date satisfaction.
+                        for dep_name in &sat_target.depends_on {
+                            if let Some(dep_target) = self.targets.get(dep_name.as_str())
+                                && dep_target.check.is_some()
+                                && !task.satisfies.contains(dep_name)
+                            {
+                                let (dsat, ddetail, _) = self.eval_target(dep_target, &sat_map);
+                                steps.push(self.mk_step(dep_name, dsat, ddetail));
+                                sat_map.insert(dep_name, dsat);
+                                self.state
+                                    .set_check_result(dep_name, dsat == Satisfaction::Satisfied);
+                            }
+                        }
                         let (rsat, rdetail, _from_cache) = self.eval_target(sat_target, &sat_map);
                         steps.push(self.mk_step(sat_name, rsat, rdetail.clone()));
                         sat_map.insert(sat_name, rsat);
@@ -373,6 +403,13 @@ impl App {
             if cur_sat == Satisfaction::Satisfied {
                 steps.push(self.mk_step(name, cur_sat, cur_detail.clone()));
                 sat_map.insert(name, cur_sat);
+                continue;
+            }
+
+            // Stub targets (structural or demoted) cannot be satisfied by tasks
+            if target.check.is_some() || target.is_stub() {
+                sat_map.insert(name, Satisfaction::Unsatisfied);
+                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, cur_detail));
                 continue;
             }
 
@@ -444,6 +481,11 @@ impl App {
                             stack.push(dep.clone());
                         }
                     }
+                    for dep in &t.check_deps {
+                        if self.targets.contains_key(dep.as_str()) {
+                            stack.push(dep.clone());
+                        }
+                    }
                 }
             }
             visited.into_iter().collect()
@@ -459,6 +501,12 @@ impl App {
             in_deg.entry(name.clone()).or_insert(0);
             if let Some(t) = self.targets.get(name) {
                 for dep in &t.depends_on {
+                    if names_set.contains(dep) {
+                        adj.entry(dep.clone()).or_default().push(name.clone());
+                        *in_deg.entry(name.clone()).or_insert(0) += 1;
+                    }
+                }
+                for dep in &t.check_deps {
                     if names_set.contains(dep) {
                         adj.entry(dep.clone()).or_default().push(name.clone());
                         *in_deg.entry(name.clone()).or_insert(0) += 1;
@@ -514,12 +562,25 @@ impl App {
         }
 
         if let Some(check) = &target.check {
-            // Leaf target: use cached result if previously satisfied and deps unchanged
+            // Check dependencies must be satisfied to run check
+            let check_deps_ok = target
+                .check_deps
+                .iter()
+                .all(|dep| deps_sat.get(dep.as_str()) == Some(&Satisfaction::Satisfied));
+            if !check_deps_ok {
+                return (
+                    Satisfaction::Unsatisfied,
+                    "(check dep not satisfied)".to_string(),
+                    false,
+                );
+            }
+
+            // Leaf target: use cached result if previously satisfied and check deps unchanged
             if let Some(ts) = self.state.get(&target.name)
                 && ts.satisfied == Some(true)
             {
                 let deps_ok = target
-                    .depends_on
+                    .check_deps
                     .iter()
                     .all(|dep| deps_sat.get(dep.as_str()) == Some(&Satisfaction::Satisfied));
                 if deps_ok {
@@ -528,7 +589,11 @@ impl App {
             }
             match check() {
                 Ok(true) => (Satisfaction::Satisfied, "".to_string(), false),
-                Ok(false) => (Satisfaction::Unsatisfied, "".to_string(), false),
+                Ok(false) => (
+                    Satisfaction::Unsatisfied,
+                    "(check failed)".to_string(),
+                    false,
+                ),
                 Err(e) => (
                     Satisfaction::Unsatisfied,
                     format!("check error: {e}"),
@@ -566,9 +631,20 @@ impl App {
         would_satisfy: &HashSet<&str>,
     ) -> (Satisfaction, String) {
         if let Some(check) = &target.check {
+            // Check dependencies must be satisfied to run check
+            let check_deps_ok = target.check_deps.iter().all(|dep| {
+                deps_sat.get(dep.as_str()) == Some(&Satisfaction::Satisfied)
+                    || would_satisfy.contains(dep.as_str())
+            });
+            if !check_deps_ok {
+                return (
+                    Satisfaction::Unsatisfied,
+                    "(check dep not satisfied)".to_string(),
+                );
+            }
             match check() {
                 Ok(true) => (Satisfaction::Satisfied, "".to_string()),
-                Ok(false) => (Satisfaction::Unsatisfied, "".to_string()),
+                Ok(false) => (Satisfaction::Unsatisfied, "(check failed)".to_string()),
                 Err(e) => (Satisfaction::Unsatisfied, format!("check error: {e}")),
             }
         } else {
@@ -640,6 +716,11 @@ impl App {
                         visit(dep.as_str(), targets, color, path)?;
                     }
                 }
+                for dep in &t.check_deps {
+                    if targets.contains_key(dep.as_str()) {
+                        visit(dep.as_str(), targets, color, path)?;
+                    }
+                }
             }
             path.pop();
             color.insert(name, BLACK);
@@ -694,22 +775,31 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_miss_dep_changed_runs_check() {
+    fn test_cache_miss_check_dep_changed_runs_check() {
         let mut app = App::new();
         let (called, t) = tracked_check();
         app.target(Target::new("dep").check(|| Ok(false)));
-        app.target(t.depends_on("dep"));
+        app.target(t.check_dep("dep"));
         app.validate().unwrap();
 
         // Pre-populate as satisfied
         app.state.set_check_result("leaf", true);
 
         let steps = app.run_check(&make_config(), &[]);
-        // "dep" is unsatisfied → "leaf" cache is invalidated
+        // "dep" (alphabetically first) is unsatisfied → "leaf" check dep unsatisfied → demoted
+        assert_eq!(steps[0].name, "dep");
         assert_eq!(steps[0].sat, Satisfaction::Unsatisfied);
+        assert!(steps[0].detail.contains("check failed"));
+        assert_eq!(steps[1].name, "leaf");
+        assert_eq!(steps[1].sat, Satisfaction::Unsatisfied);
         assert!(
-            called.load(std::sync::atomic::Ordering::SeqCst),
-            "check should have been called because dep changed"
+            steps[1].detail.contains("check dep not satisfied"),
+            "should show check dep not satisfied, got: {}",
+            steps[1].detail
+        );
+        assert!(
+            !called.load(std::sync::atomic::Ordering::SeqCst),
+            "check should NOT have been called when check dep is unsatisfied"
         );
     }
 
@@ -734,20 +824,157 @@ mod tests {
     #[test]
     fn test_aggregate_never_cached() {
         let mut app = App::new();
-        let (_called, t) = tracked_check();
-        app.target(Target::new("dep").check(|| Ok(true)));
-        app.target(t.depends_on("dep"));
+        app.target(Target::new("leaf").check(|| Ok(true)));
         app.target(Target::new("agg").depends_on("leaf"));
         app.validate().unwrap();
 
         app.state.set_check_result("leaf", true);
 
         let steps = app.run_check(&make_config(), &[]);
-        assert_eq!(steps[2].sat, Satisfaction::Satisfied);
+        assert_eq!(steps[0].sat, Satisfaction::Satisfied);
+        assert!(steps[0].detail.contains("cached"));
+        assert_eq!(steps[1].sat, Satisfaction::Satisfied);
         assert!(
-            steps[2].detail.contains("aggregate"),
+            steps[1].detail.contains("aggregate"),
             "aggregate should show aggregate detail, not cached"
         );
+    }
+
+    #[test]
+    fn test_check_dep_blocks_check() {
+        let mut app = App::new();
+        app.target(Target::new("prereq").check(|| Ok(false)));
+        app.target(Target::new("main").check_dep("prereq").check(|| {
+            panic!("check should never be called");
+        }));
+        app.validate().unwrap();
+
+        let steps = app.run_check(&make_config(), &[]);
+        // "main" > "prereq" alphabetically → prereq first
+        assert_eq!(steps[0].name, "prereq");
+        assert_eq!(steps[0].sat, Satisfaction::Unsatisfied);
+        assert_eq!(steps[1].name, "main");
+        assert_eq!(steps[1].sat, Satisfaction::Unsatisfied);
+        assert!(steps[1].detail.contains("check dep not satisfied"));
+    }
+
+    #[test]
+    fn test_check_dep_satisfied_runs_check() {
+        let mut app = App::new();
+        let called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let c = called.clone();
+        app.target(Target::new("prereq").check(|| Ok(true)));
+        app.target(Target::new("main").check_dep("prereq").check(move || {
+            c.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(true)
+        }));
+        app.validate().unwrap();
+
+        let steps = app.run_check(&make_config(), &[]);
+        // "main" > "prereq" → prereq first
+        assert_eq!(steps[0].name, "prereq");
+        assert_eq!(steps[0].sat, Satisfaction::Satisfied);
+        assert_eq!(steps[1].name, "main");
+        assert_eq!(steps[1].sat, Satisfaction::Satisfied);
+        assert!(called.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_demoted_leaf_skips_task() {
+        let mut app = App::new();
+        let task_ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let tr = task_ran.clone();
+
+        app.target(Target::new("net").check(|| Ok(false)));
+        app.target(Target::new("rg").check_dep("net").check(|| Ok(true)));
+        app.task(Task::new("install_net").satisfies("net").run(move || {
+            tr.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }));
+
+        app.validate().unwrap();
+        let steps = app.run_apply(&make_config(), &[]);
+
+        // "net" check fails → demoted to stub → no task runs
+        // "rg" check dep unsatisfied → demoted to stub → no task
+        assert_eq!(steps.len(), 2);
+        assert_eq!(steps[0].sat, Satisfaction::Unsatisfied);
+        assert_eq!(steps[1].sat, Satisfaction::Unsatisfied);
+        assert!(
+            !task_ran.load(std::sync::atomic::Ordering::SeqCst),
+            "task should NOT have run for demoted leaf"
+        );
+    }
+
+    #[test]
+    fn test_leaf_check_fails_no_task() {
+        let mut app = App::new();
+        let task_ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let tr = task_ran.clone();
+
+        app.target(Target::new("leaf").check(|| Ok(false)));
+        app.task(Task::new("task").satisfies("leaf").run(move || {
+            tr.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }));
+
+        app.validate().unwrap();
+        let steps = app.run_apply(&make_config(), &[]);
+
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].sat, Satisfaction::Unsatisfied);
+        assert!(steps[0].detail.contains("check failed"));
+        assert!(
+            !task_ran.load(std::sync::atomic::Ordering::SeqCst),
+            "task should NOT run for a demoted leaf"
+        );
+    }
+
+    #[test]
+    fn test_task_still_runs_for_aggregate() {
+        let mut app = App::new();
+        let task_ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let tr = task_ran.clone();
+
+        app.target(Target::new("leaf").check(|| Ok(false)));
+        app.target(Target::new("agg").depends_on("leaf"));
+        app.task(Task::new("task").satisfies("agg").run(move || {
+            tr.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }));
+
+        app.validate().unwrap();
+        let steps = app.run_apply(&make_config(), &[]);
+
+        assert!(task_ran.load(std::sync::atomic::Ordering::SeqCst));
+        // leaf (initial) + agg (initial → task runs) + leaf (re-check dep) + agg (re-check)
+        assert!(
+            steps.len() == 3 || steps.len() == 4,
+            "expected 3 or 4 steps, got {}",
+            steps.len()
+        );
+        let last = steps.last().unwrap();
+        assert_eq!(last.name, "agg");
+        assert_eq!(last.sat, Satisfaction::Unsatisfied);
+    }
+
+    #[test]
+    fn test_check_dep_cycle_detected() {
+        let mut app = App::new();
+        app.target(Target::new("a").check_dep("b").check(|| Ok(true)));
+        app.target(Target::new("b").check_dep("a").check(|| Ok(true)));
+
+        let err = app.validate().unwrap_err();
+        assert!(err.to_string().contains("cycle"));
+    }
+
+    #[test]
+    fn test_unknown_check_dep_detected() {
+        let mut app = App::new();
+        app.target(Target::new("a").check_dep("nonexistent").check(|| Ok(true)));
+
+        let err = app.validate().unwrap_err();
+        assert!(err.to_string().contains("nonexistent"));
     }
 
     #[test]

@@ -38,8 +38,10 @@ fn test_apply_runs_task() {
     let ran = Arc::new(AtomicBool::new(false));
     let ran_clone = ran.clone();
 
+    // Aggregate targets (no check) can be satisfied by tasks
+    app.target(Target::new("agg").depends_on("leaf"));
     app.target(Target::new("leaf").check(|| Ok(false)));
-    app.task(Task::new("task").satisfies("leaf").run(move || {
+    app.task(Task::new("task").satisfies("agg").run(move || {
         ran_clone.store(true, Ordering::SeqCst);
         Ok(())
     }));
@@ -49,10 +51,8 @@ fn test_apply_runs_task() {
     let steps = app.run_apply(&config, &[]);
 
     assert!(ran.load(Ordering::SeqCst), "task should have run");
-    assert_eq!(steps.len(), 1);
-    // After running, we re-check — but our check still returns false
-    // because the check function still returns Ok(false)
-    // This is expected; the check function is the source of truth
+    // leaf (initial) + agg (initial, task ran) + leaf (re-check dep) + agg (re-check)
+    assert!(steps.len() >= 3, "expected 3+ steps, got {}", steps.len());
 }
 
 #[test]
@@ -79,10 +79,11 @@ fn test_label_filter_disables_task() {
     let ran = Arc::new(AtomicBool::new(false));
     let ran_clone = ran.clone();
 
+    app.target(Target::new("agg").depends_on("leaf"));
     app.target(Target::new("leaf").check(|| Ok(false)));
     app.task(
         Task::new("task")
-            .satisfies("leaf")
+            .satisfies("agg")
             .label("slow")
             .run(move || {
                 ran_clone.store(true, Ordering::SeqCst);
@@ -98,22 +99,29 @@ fn test_label_filter_disables_task() {
     let steps = app.run_apply(&config, &[]);
 
     assert!(!ran.load(Ordering::SeqCst), "task should NOT have run");
+    assert_eq!(steps.len(), 2);
     assert_eq!(steps[0].sat, Satisfaction::Unsatisfied);
+    assert_eq!(steps[1].sat, Satisfaction::Unsatisfied);
 }
 
 #[test]
 fn test_plan_shows_what_would_happen() {
     let mut app = App::new();
+    // Aggregate targets can be satisfied by tasks in plan mode
+    app.target(Target::new("agg").depends_on("leaf"));
     app.target(Target::new("leaf").check(|| Ok(false)));
-    app.task(Task::new("task").satisfies("leaf").run(|| Ok(())));
+    app.task(Task::new("task").satisfies("agg").run(|| Ok(())));
 
     app.validate().unwrap();
     let config = Config::default();
     let steps = app.run_plan(&config, &[]);
 
-    // In plan mode, the task would run and satisfy "leaf"
-    assert_eq!(steps.len(), 1);
-    assert_eq!(steps[0].sat, Satisfaction::Satisfied);
+    // In plan mode: leaf check fails (demoted), agg depends on leaf → agg unsatisfied → task would run
+    assert_eq!(steps.len(), 2);
+    assert_eq!(steps[0].name, "leaf");
+    assert_eq!(steps[0].sat, Satisfaction::Unsatisfied);
+    assert_eq!(steps[1].name, "agg");
+    assert_eq!(steps[1].sat, Satisfaction::Satisfied);
 }
 
 #[test]

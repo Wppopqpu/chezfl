@@ -1,5 +1,5 @@
 use chezfl::tools::{fs, mime, yay};
-use chezfl::{run_cli, App, Target, Task};
+use chezfl::{App, Target, Task, run_cli};
 use std::path::PathBuf;
 
 fn home() -> PathBuf {
@@ -16,23 +16,22 @@ fn register_core(app: &mut App) {
     );
 }
 
-fn register_software(app: &mut App){
-    const SOFTWARES: &[&str] = &[
-        "xdg-utils",
-    ];
+fn register_pacman_software(app: &mut App) {
+    const SOFTWARES: &[&str] = &["stow", "xdg-utils"];
 
     for &pkgname in SOFTWARES {
         app.target(
             Target::new(format!("pkg_{pkgname}"))
                 .description(format!("package {pkgname} is installed"))
+                .check_dep("pkg_yay")
                 .check(|| yay::is_installed(pkgname))
-                .depends_on("pkg_yay")
+                .depends_on("pkg_yay"),
         );
         app.task(
             Task::new(format!("install_pkg_{pkgname}"))
                 .description(format!("install package {pkgname} using yay"))
                 .run(|| yay::install(&[pkgname]).map(|_| ()))
-                .depends_on("pkg_yay")
+                .depends_on("pkg_yay"),
         );
     }
 }
@@ -92,15 +91,11 @@ fn register_niri_wants(app: &mut App) {
         let target_name = format!("niri_wants_{name}");
         let svc_name = format!("{name}.service");
 
-        app.target(
-            Target::new(&target_name)
-                .description(desc)
-                .check({
-                    let wants_dir = wants_dir.clone();
-                    let svc_name = svc_name.clone();
-                    move || fs::is_symlink(wants_dir.join(&svc_name))
-                }),
-        );
+        app.target(Target::new(&target_name).description(desc).check({
+            let wants_dir = wants_dir.clone();
+            let svc_name = svc_name.clone();
+            move || fs::is_symlink(wants_dir.join(&svc_name))
+        }));
 
         app.task(
             Task::new(format!("setup_niri_wants_{name}"))
@@ -229,7 +224,7 @@ fn main() -> anyhow::Result<()> {
     let mut app = App::load();
 
     register_core(&mut app);
-    register_software(&mut app);
+    register_pacman_software(&mut app);
     register_mime(&mut app);
     register_niri_wants(&mut app);
     register_koishi_cursors(&mut app);

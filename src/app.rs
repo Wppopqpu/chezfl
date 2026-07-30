@@ -589,11 +589,7 @@ impl App {
             }
             match check() {
                 Ok(true) => (Satisfaction::Satisfied, "".to_string(), false),
-                Ok(false) => (
-                    Satisfaction::Unsatisfied,
-                    "(check failed)".to_string(),
-                    false,
-                ),
+                Ok(false) => (Satisfaction::Unsatisfied, String::new(), false),
                 Err(e) => (
                     Satisfaction::Unsatisfied,
                     format!("check error: {e}"),
@@ -644,7 +640,7 @@ impl App {
             }
             match check() {
                 Ok(true) => (Satisfaction::Satisfied, "".to_string()),
-                Ok(false) => (Satisfaction::Unsatisfied, "(check failed)".to_string()),
+                Ok(false) => (Satisfaction::Unsatisfied, String::new()),
                 Err(e) => (Satisfaction::Unsatisfied, format!("check error: {e}")),
             }
         } else {
@@ -789,7 +785,6 @@ mod tests {
         // "dep" (alphabetically first) is unsatisfied → "leaf" check dep unsatisfied → demoted
         assert_eq!(steps[0].name, "dep");
         assert_eq!(steps[0].sat, Satisfaction::Unsatisfied);
-        assert!(steps[0].detail.contains("check failed"));
         assert_eq!(steps[1].name, "leaf");
         assert_eq!(steps[1].sat, Satisfaction::Unsatisfied);
         assert!(
@@ -923,7 +918,6 @@ mod tests {
 
         assert_eq!(steps.len(), 1);
         assert_eq!(steps[0].sat, Satisfaction::Unsatisfied);
-        assert!(steps[0].detail.contains("check failed"));
         assert!(
             !task_ran.load(std::sync::atomic::Ordering::SeqCst),
             "task should NOT run for a demoted leaf"

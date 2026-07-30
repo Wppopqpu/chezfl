@@ -59,6 +59,12 @@ pub enum Command {
         /// Targets to apply (default: all)
         targets: Vec<String>,
     },
+    /// Generate shell completion script
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
 }
 
 impl Default for Cli {

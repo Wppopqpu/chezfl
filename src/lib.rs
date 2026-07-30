@@ -13,7 +13,9 @@ pub mod task;
 pub mod tools;
 
 pub use app::{App, Config};
+use clap::CommandFactory;
 use clap::Parser;
+use clap_complete::generate;
 pub use cmd::{Cmd, Output as CmdOutput, cmd, run_cmd};
 pub use target::Target;
 pub use task::Task;
@@ -133,6 +135,14 @@ pub fn run_cli(app: &mut App) -> anyhow::Result<()> {
         cli::Command::Apply { targets } => {
             let steps = app.run_apply(&config, targets);
             print_steps(&steps, false, show_desc);
+        }
+        cli::Command::Completions { shell } => {
+            let bin_name = std::env::args().next()
+                .and_then(|p| std::path::Path::new(&p).file_name().map(|s| s.to_os_string()))
+                .and_then(|s| s.into_string().ok())
+                .unwrap_or_else(|| "chezfl".into());
+            let mut cmd = cli::Cli::command();
+            generate(*shell, &mut cmd, &bin_name, &mut std::io::stdout());
         }
     }
 

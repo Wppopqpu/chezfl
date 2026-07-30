@@ -7,13 +7,21 @@ chezfl fills the gap that tools like `stow` (dotfile symlinks) cannot cover: pac
 ## Language
 
 **Target**:
-A declaration of a **concrete** desired state. Each target has a unique **name** (string identifier). Satisfaction is determined by the target's kind:
+A declaration of a **concrete** desired state. Each target has a unique **name** (string identifier). A target is exactly one of three kinds:
 
-- **Leaf target**: has a **check** function (`fn() -> anyhow::Result<bool>`) that probes the real system. `Ok(true)` = satisfied, `Ok(false)` = unsatisfied, `Err` = check itself failed. Deps declared on a leaf target affect topological ordering only — the check runs regardless of dep state.
-- **Aggregate target**: no check function. Its satisfaction is derived entirely from its dependencies — it is satisfied when **all** its dependency targets are satisfied. An aggregate with **zero** dependencies is always unsatisfied (it needs a task to satisfy it, or deps to derive from).
-- **Stub target**: a target with neither `check` nor `depends_on`. Always unsatisfied by nature, but can be satisfied via `--set` (persisted across runs). Useful as a placeholder that must be satisfied by a future task, or as a manual toggle.
+- **Leaf target**: has a **check** function (`fn() -> anyhow::Result<bool>`) that probes the real system. `Ok(true)` = satisfied, `Ok(false)` = unsatisfied, `Err` = check itself failed. Optionally declares **check dependencies** (see below). No `depends_on`. When `check` returns `false`, or when any check dep is unsatisfied, the target is **demoted to stub** (unsatisfied, no task execution).
+- **Aggregate target**: no `check`. Its satisfaction is derived entirely from its `depends_on` — satisfied when **all** dependencies are satisfied. An aggregate with zero dependencies is always unsatisfied (needs a task to satisfy it, or deps to derive from).
+- **Stub target**: neither `check` nor `depends_on`. Always unsatisfied, can be satisfied only via `--set` (persisted across runs). A task may declare `satisfies` for a stub target, but will **never run** for it (see Task).
 
-A target may declare dependencies on other targets. The dependency graph must be acyclic. A target can only be satisfied by **exactly one** task.
+The dimension of `depends_on` vs `check_dep` is orthogonal: `depends_on` controls topological ordering and aggregate derivation; `check_dep` guards whether a leaf's check runs. Leaf targets use `check_dep` only; aggregate targets use `depends_on` only. The graph (considering both `depends_on` and `check_dep`) must be acyclic. A target can be satisfied by **exactly one** task.
+
+Targets are **concrete** — one target = one specific desired state. Users create multiple targets programmatically (e.g., looping over repos). There is no template abstraction.
+
+*Examples*: "package ripgrep is installed", "repo ~/src/chezfl is cloned and built", "service nginx is running".
+*Avoid*: Config entry, setting, value
+
+**Check dependency**:
+A leaf target may declare zero or more check dependencies — other targets that must be satisfied before the check function runs. If any check dep is unsatisfied, the leaf is demoted to stub: treated as unsatisfied, check skipped, no task runs for it. Check dep state is part of the cache key for leaf targets. Multiple check deps are AND (all must be satisfied). Check dep chains are transitive by definition: if A's check dep B is demoted to stub, B is unsatisfied, so A's check dep is also unsatisfied.
 
 Targets are **concrete** — one target = one specific desired state. Users create multiple targets programmatically (e.g., looping over repos). There is no template abstraction.
 
@@ -37,6 +45,8 @@ Tools that modify the system are **interactive by default** — they use [`exec(
 **Task**:
 An actionable unit that **satisfies one or more targets** (1-to-many). A task declares which targets it satisfies and which other targets must be satisfied before it can run. A task does NOT depend on other tasks — only on targets.
 
+A task **never runs** for targets that are in stub state (whether originally stub, or demoted from leaf by a failed check or an unsatisfied check dep). Stub targets that have a `satisfies` declaration are simply skipped — no error is raised.
+
 Tasks have **labels** used for filtering and disabling. A disabled task is completely ignored — its targets are skipped. A task should be idempotent, designed to be run repeatedly. Its run function signature is `fn() -> anyhow::Result<()>`.
 
 Task execution is **serial** (one at a time) — interactive programs like `yay` may prompt the user during execution. chezfl forwards stdin to task processes and captures/displays stdout and stderr along with the command being run.
@@ -52,8 +62,8 @@ Each persisted entry stores whether the target was last satisfied (`satisfied`),
 
 On `check` and `apply`, chezfl uses the following logic:
 - **Manual override** (`manually_set = true`): skip the check function entirely, return the manual value.
-- **Leaf target with in-memory cached satisfied state** (`satisfied = true` within the current run): skip the check function if all dependencies are still satisfied in the current run. Return "(cached)".
-- **All other cases**: run the check function.
+- **Leaf target with in-memory cached satisfied state** (`satisfied = true` within the current run): skip the check function if all **check dependencies** are still satisfied in the current run (check dep state is a cache key). Return "(cached)".
+- **All other cases**: run the check function (after first verifying check deps — if any check dep is unsatisfied, demote to stub without running check).
 
 Aggregate targets are never cached — their satisfaction is always derived from their current dependencies' satisfaction. In-memory caching for leaf targets works within a single run: once checked, the result is reused for subsequent dependents and re-checks.
 

@@ -36,17 +36,27 @@ use chezfl::{App, Target, Task, run_cli};
 fn main() -> anyhow::Result<()> {
     let mut app = App::new();
 
+    // Aggregate target — no check, satisfied when all deps are satisfied
     app.target(Target::new("network"));
 
+    // Leaf target — check guarded by check dependency
     app.target(
         Target::new("rg_installed")
-            .check(|| chezfl::tools::yay::is_installed("ripgrep"))
-            .depends_on("network"),
+            .check_dep("network")
+            .check(|| chezfl::tools::yay::is_installed("ripgrep")),
     );
 
+    // Aggregate — satisfies when both network and rg are ready
+    app.target(
+        Target::new("rg_ready")
+            .depends_on("network")
+            .depends_on("rg_installed"),
+    );
+
+    // Task satisfies an aggregate target (runs when deps allow, re-checks after)
     app.task(
         Task::new("install_rg")
-            .satisfies("rg_installed")
+            .satisfies("rg_ready")
             .depends_on("network")
             .label("install")
             .run(|| {
@@ -70,12 +80,17 @@ fn main() -> anyhow::Result<()> {
     target!("rg_installed",
         description: "ripgrep (rg) is installed",
         check: || chezfl::tools::yay::is_installed("ripgrep"),
-        depends_on: [network],
+        check_dep: [network],
+    );
+
+    target!("rg_ready",
+        description: "rg is installed and ready",
+        depends_on: [network, rg_installed],
     );
 
     task!("install_rg",
         description: "Install ripgrep via yay",
-        satisfies: [rg_installed],
+        satisfies: [rg_ready],
         depends_on: [network],
         labels: ["install"],
         run: || {
@@ -88,7 +103,7 @@ fn main() -> anyhow::Result<()> {
 }
 ```
 
-See [`examples/laptop.rs`](examples/laptop.rs) for the full macro-API example.
+See [`examples/laptop.rs`](examples/laptop.rs) and [`examples/desktop.rs`](examples/desktop.rs) for full macro/builder examples.
 
 ### Build and run
 
@@ -264,15 +279,23 @@ See [CONTEXT.md](CONTEXT.md) for the full glossary and design rationale.
 
 ### Targets
 
-A **Target** is a concrete desired state. Two kinds:
+A **Target** is a concrete desired state. Three kinds:
 
 - **Leaf target** — has a `check` closure that probes the real system
-  (e.g. "is ripgrep installed?")
-- **Aggregate target** — no check; satisfied when all its dependencies are
-  satisfied. Useful for grouping.
+  (e.g. "is ripgrep installed?"). Optionally declares **check dependencies**
+  (`check_dep`) — the check only runs when all check deps are satisfied.
+  If a check dep is unsatisfied, or if the check returns `false`, the leaf
+  is demoted to stub (cannot be satisfied by a task).
+- **Aggregate target** — no check; satisfied when all its `depends_on`
+  dependencies are satisfied. Useful for grouping. Tasks satisfy aggregates.
+- **Stub target** — neither check nor deps; always unsatisfied unless
+  manually set via `--set`. A task declaring `satisfies` for a stub target
+  is silently skipped.
 
 Each target is satisfied by **exactly one** task. Targets form an
-acyclic dependency DAG.
+acyclic dependency DAG. The dimensions of `depends_on` and `check_dep`
+are orthogonal — `depends_on` controls topological ordering and aggregate
+derivation; `check_dep` guards whether a leaf's check runs.
 
 ### Tasks
 

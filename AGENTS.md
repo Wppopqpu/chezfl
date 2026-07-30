@@ -28,10 +28,11 @@ cargo clippy -- -D warnings  # lint (run after fmt)
 
 ## Domain model (see CONTEXT.md for full glossary)
 
-- **Target** — a concrete desired state with a `check` function. Two kinds: leaf (has check) and aggregate (satisfaction from deps). Each target is satisfied by exactly one task. Targets form an acyclic dependency DAG.
-- **Task** — satisfies 1+ targets, depends on targets (not tasks), has labels for filtering. Serial execution, idempotent, stdin-forwarded. No rollback.
+- **Target** — a concrete desired state. Three kinds: leaf (has check + optional check_dep), aggregate (no check, satisfaction from depends_on), and stub (no check, no deps, always unsatisfied unless --set). Each target is satisfied by exactly one task. Targets form an acyclic dependency DAG.
+- **Check dependency** (`check_dep`) — declared on a leaf target. All check deps must be satisfied before the check runs. If any check dep is unsatisfied, or if the check returns false, the leaf is demoted to stub (no task runs).
+- **Task** — satisfies 1+ targets, depends on targets (not tasks), has labels for filtering. Serial execution, idempotent, stdin-forwarded. No rollback. Tasks never run for stub targets (original or demoted).
 - **State** — persisted in TOML (`~/.local/state/chezfl/state.toml`). Supports manual override via `--set`/`--unset`/`--recheck`. Check caching: leaf targets skip check when previously satisfied + deps unchanged.
 - **Description** — optional human-readable string on targets and tasks via `.description("text")`. Shown always for unsatisfied targets; opt-in via `--show-descriptions` flag.
 - **CLI** — `./chezfl [apply]`, `./chezfl check [target...]`, `./chezfl plan`. Supports `--label`, `--exclude-label`, `--show-descriptions`, `--no-banner`.
-- **API** — supports both App builder and global macros.
+- **API** — supports both App builder and global macros. Macro `check_dep:` must follow `check:` (Rust macro match order).
 - **ADR-0001** — Configuration as Rust Code, not a DSL.

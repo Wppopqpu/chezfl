@@ -2,7 +2,7 @@
 name = "chezfl"
 version = "0.1.0"
 edition = "2024"
-default-run = "my_config"
+default-run = "chezfl"
 
 [dependencies]
 anyhow = "1"

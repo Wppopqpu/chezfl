@@ -31,7 +31,7 @@ fn register_software(app: &mut App) {
                 .description(format!("package {pkgname} is installed"))
                 .check_dep("pkg_yay")
                 .check(|| yay::is_installed(pkgname))
-                .depends_on("pkg_yay"),
+                .check_dep("pkg_yay"),
         );
         app.task(
             Task::new(format!("install_pkg_{pkgname}"))
@@ -76,7 +76,8 @@ fn register_mime(app: &mut App) {
         app.target(
             Target::new(name)
                 .description(desc)
-                .check(move || mime::is_default(mime_type, desktop)),
+                .check(move || mime::is_default(mime_type, desktop))
+                .check_dep("pkg_xdg-utils"),
         );
 
         app.task(
@@ -86,7 +87,8 @@ fn register_mime(app: &mut App) {
                 .run(move || {
                     mime::set_default(mime_type, desktop)?;
                     Ok(())
-                }),
+                })
+                .depends_on("pkg_xdg-utils"),
         );
     }
 

@@ -158,9 +158,36 @@ fn register_koishi_cursors(app: &mut App) {
 }
 
 fn register_shell_completions(app: &mut App) {
+    let binary = std::env::current_exe().expect("failed to get current exe path");
+    let completion_file = home().join(".config/fish/completions/chezfl.fish");
+
+    app.target(
+        Target::new("chezfl_fish_completions")
+            .description("fish completion script for chezfl is up-to-date")
+            .check({
+                let completion_file = completion_file.clone();
+                let binary = binary.clone();
+                move || fs::up_to_date(&completion_file, &[&binary])
+            }),
+    );
+
+    app.task(
+        Task::new("generate_chezfl_fish_completions")
+            .description("generate fish completion script for chezfl")
+            .satisfies("chezfl_fish_completions")
+            .run(move || {
+                let output = std::process::Command::new(&binary)
+                    .env("COMPLETE", "fish")
+                    .output()?;
+                anyhow::ensure!(output.status.success(), "completion generation failed");
+                fs::write(&completion_file, String::from_utf8(output.stdout)?.as_str())
+            }),
+    );
+
     app.target(
         Target::new("cli_shell_completions")
-            .description("shell completions for installed tools"),
+            .description("shell completions for installed tools")
+            .depends_on("chezfl_fish_completions"),
     );
 }
 

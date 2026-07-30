@@ -9,8 +9,10 @@
 /// Available tools:
 /// - [`git`] — clone, pull, fetch, status
 /// - [`yay`] — install, remove, update, is_installed
+/// - [`mime`] — xdg-mime query, is_default, set_default
 /// - [`fs`] — file predicates (is_file, is_dir, exists) and operations
 ///   (read, write, copy, remove, symlink)
 pub mod fs;
 pub mod git;
+pub mod mime;
 pub mod yay;

@@ -61,15 +61,15 @@ pub struct Cli {
     pub exclude_label: Vec<String>,
 
     /// Manually set target satisfaction
-    #[arg(long, global = true, value_name = "TARGET")]
+    #[arg(long, global = true, value_name = "TARGET", add = ArgValueCompleter::new(complete_targets))]
     pub set: Vec<String>,
 
     /// Manually unset target satisfaction
-    #[arg(long, global = true, value_name = "TARGET")]
+    #[arg(long, global = true, value_name = "TARGET", add = ArgValueCompleter::new(complete_targets))]
     pub unset: Vec<String>,
 
     /// Re-check a target (clear cached state)
-    #[arg(long, global = true, value_name = "TARGET")]
+    #[arg(long, global = true, value_name = "TARGET", add = ArgValueCompleter::new(complete_targets))]
     pub recheck: Vec<String>,
 
     /// Show target descriptions (always shown for unsatisfied targets)

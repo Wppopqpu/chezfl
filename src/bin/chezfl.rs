@@ -12,7 +12,7 @@ fn register_core(app: &mut App) {
     app.target(
         Target::new("pkg_yay")
             .description("yay is installed")
-            .check(|| fs::is_runnable("/usr/bin/yay")),
+            .check(move || fs::is_runnable("/usr/bin/yay")),
     );
 
     app.target(
@@ -30,13 +30,13 @@ fn register_software(app: &mut App) {
             Target::new(format!("pkg_{pkgname}"))
                 .description(format!("package {pkgname} is installed"))
                 .check_dep("pkg_yay")
-                .check(|| yay::is_installed(pkgname))
-                .check_dep("pkg_yay"),
+                .check(move || yay::is_installed(pkgname)),
         );
         app.task(
             Task::new(format!("install_pkg_{pkgname}"))
                 .description(format!("install package {pkgname} using yay"))
-                .run(|| yay::install(&[pkgname]).map(|_| ()))
+                .satisfies(format!("pkg_{pkgname}"))
+                .run(move || yay::install(&[pkgname]).map(|_| ()))
                 .depends_on("pkg_yay"),
         );
     }

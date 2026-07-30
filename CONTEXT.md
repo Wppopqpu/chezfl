@@ -11,7 +11,7 @@ A declaration of a **concrete** desired state. Each target has a unique **name**
 
 - **Leaf target**: has a **check** function (`fn() -> anyhow::Result<bool>`) that probes the real system. `Ok(true)` = satisfied, `Ok(false)` = unsatisfied, `Err` = check itself failed. Deps declared on a leaf target affect topological ordering only — the check runs regardless of dep state.
 - **Aggregate target**: no check function. Its satisfaction is derived entirely from its dependencies — it is satisfied when **all** its dependency targets are satisfied. An aggregate with **zero** dependencies is always unsatisfied (it needs a task to satisfy it, or deps to derive from).
-- **Stub target**: a target with neither `check` nor `depends_on`. Always unsatisfied. Useful as a placeholder that must be satisfied by a future task.
+- **Stub target**: a target with neither `check` nor `depends_on`. Always unsatisfied by nature, but can be satisfied via `--set` (persisted across runs). Useful as a placeholder that must be satisfied by a future task, or as a manual toggle.
 
 A target may declare dependencies on other targets. The dependency graph must be acyclic. A target can only be satisfied by **exactly one** task.
 
@@ -73,7 +73,7 @@ Both produce the same runtime model. Users compile their config into a binary an
 - `./my-config check [target...]` — check targets (default all), report satisfaction state
 - `./my-config plan` — dry-run: simulate task execution (assume satisfied after) without side effects, output in text-tree format
 - `./my-config check --label foo --exclude-label bar` — filter targets by task labels
-- `./my-config --show-descriptions` — show target descriptions in dim text (always shown for unsatisfied targets)
+- `./my-config --show-descriptions` — show target descriptions (always shown for unsatisfied targets, styled as **red strikethrough**; satisfied descriptions shown in dim text)
 
 **Description**:
 An optional human-readable string attached to a target or task via `.description("text")`. Descriptions are always displayed when a target is unsatisfied; for satisfied targets they are shown only with `--show-descriptions`. Both builder API and macros support `.description(...)`.

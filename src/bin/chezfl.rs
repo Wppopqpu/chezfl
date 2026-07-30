@@ -14,9 +14,15 @@ fn register_core(app: &mut App) {
             .description("yay is installed")
             .check(|| fs::is_runnable("/usr/bin/yay")),
     );
+
+    app.target(
+        Target::new("core")
+            .depends_on("network")
+            .depends_on("pkg_yay"),
+    );
 }
 
-fn register_pacman_software(app: &mut App) {
+fn register_software(app: &mut App) {
     const SOFTWARES: &[&str] = &["stow", "xdg-utils"];
 
     for &pkgname in SOFTWARES {
@@ -34,6 +40,14 @@ fn register_pacman_software(app: &mut App) {
                 .depends_on("pkg_yay"),
         );
     }
+
+    let mut pkg = Target::new("pkg");
+    pkg = pkg.description("all packages is installed");
+    for &pkgname in SOFTWARES {
+        pkg = pkg.depends_on(format!("pkg_{pkgname}"));
+    }
+    pkg = pkg.depends_on("pkg_yay");
+    app.target(pkg);
 }
 
 fn register_mime(app: &mut App) {
@@ -75,6 +89,13 @@ fn register_mime(app: &mut App) {
                 }),
         );
     }
+
+    let mut mime = Target::new("mime");
+    mime = mime.description("all packages is installed");
+    for &(name, _, _, _) in MIME {
+        mime = mime.depends_on(name);
+    }
+    app.target(mime);
 }
 
 fn register_niri_wants(app: &mut App) {
@@ -216,7 +237,10 @@ fn register_grouping_targets(app: &mut App) {
             .description("everything")
             .depends_on("install_systemd_units")
             .depends_on("gui")
-            .depends_on("cli"),
+            .depends_on("cli")
+            .depends_on("pkg")
+            .depends_on("mime")
+            .depends_on("core"),
     );
 }
 
@@ -224,7 +248,7 @@ fn main() -> anyhow::Result<()> {
     let mut app = App::load();
 
     register_core(&mut app);
-    register_pacman_software(&mut app);
+    register_software(&mut app);
     register_mime(&mut app);
     register_niri_wants(&mut app);
     register_koishi_cursors(&mut app);

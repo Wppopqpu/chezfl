@@ -3,12 +3,20 @@ use std::time::SystemTime;
 
 /// Check if a path exists and is a regular file.
 pub fn is_file(path: impl AsRef<Path>) -> anyhow::Result<bool> {
-    Ok(path.as_ref().metadata().map(|m| m.is_file()).unwrap_or(false))
+    Ok(path
+        .as_ref()
+        .metadata()
+        .map(|m| m.is_file())
+        .unwrap_or(false))
 }
 
 /// Check if a path exists and is a directory.
 pub fn is_dir(path: impl AsRef<Path>) -> anyhow::Result<bool> {
-    Ok(path.as_ref().metadata().map(|m| m.is_dir()).unwrap_or(false))
+    Ok(path
+        .as_ref()
+        .metadata()
+        .map(|m| m.is_dir())
+        .unwrap_or(false))
 }
 
 /// Check if a path is a symlink (broken or not).
@@ -123,7 +131,10 @@ pub fn mtime(path: impl AsRef<Path>) -> anyhow::Result<Option<u64>> {
 /// // target is newer than prereq → up-to-date
 /// assert!(up_to_date(&tgt, &[&pre]).unwrap());
 /// ```
-pub fn up_to_date(target: impl AsRef<Path>, prerequisites: &[impl AsRef<Path>]) -> anyhow::Result<bool> {
+pub fn up_to_date(
+    target: impl AsRef<Path>,
+    prerequisites: &[impl AsRef<Path>],
+) -> anyhow::Result<bool> {
     let target_mtime = match mtime(&target)? {
         Some(t) => t,
         None => return Ok(false),
@@ -244,10 +255,7 @@ mod tests {
         copy(&src, &dst).unwrap();
         assert!(is_file(&dst).unwrap());
         std::fs::remove_file(&src).unwrap();
-        std::fs::remove_dir_all(
-            dst.parent().unwrap().parent().unwrap(),
-        )
-        .unwrap();
+        std::fs::remove_dir_all(dst.parent().unwrap().parent().unwrap()).unwrap();
     }
 
     #[test]
@@ -270,8 +278,7 @@ mod tests {
 
     #[test]
     fn test_remove_all() {
-        let d = std::env::temp_dir()
-            .join("chezfl_fs_test_remove_all");
+        let d = std::env::temp_dir().join("chezfl_fs_test_remove_all");
         let f = d.join("sub").join("file.txt");
         write(&f, "x").unwrap();
         assert!(is_file(&f).unwrap());
@@ -287,10 +294,7 @@ mod tests {
             .join("b");
         create_dir(&d).unwrap();
         assert!(is_dir(&d).unwrap());
-        std::fs::remove_dir_all(
-            d.parent().unwrap().parent().unwrap(),
-        )
-        .unwrap();
+        std::fs::remove_dir_all(d.parent().unwrap().parent().unwrap()).unwrap();
     }
 
     #[test]

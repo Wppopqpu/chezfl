@@ -11,17 +11,16 @@ pub(crate) static LABEL_NAMES: std::sync::OnceLock<Vec<String>> = std::sync::Onc
 pub(crate) fn populate_completion_lists(app: &App) {
     let targets: Vec<String> = app.all_targets().map(|t| t.name.clone()).collect();
     let _ = TARGET_NAMES.set(targets);
-    let mut labels: Vec<String> = app
-        .all_tasks()
-        .flat_map(|t| t.labels.clone())
-        .collect();
+    let mut labels: Vec<String> = app.all_tasks().flat_map(|t| t.labels.clone()).collect();
     labels.sort();
     labels.dedup();
     let _ = LABEL_NAMES.set(labels);
 }
 
 fn complete_targets(current: &OsStr) -> Vec<CompletionCandidate> {
-    let Some(names) = TARGET_NAMES.get() else { return vec![] };
+    let Some(names) = TARGET_NAMES.get() else {
+        return vec![];
+    };
     let current = current.to_string_lossy();
     names
         .iter()
@@ -31,7 +30,9 @@ fn complete_targets(current: &OsStr) -> Vec<CompletionCandidate> {
 }
 
 fn complete_labels(current: &OsStr) -> Vec<CompletionCandidate> {
-    let Some(names) = LABEL_NAMES.get() else { return vec![] };
+    let Some(names) = LABEL_NAMES.get() else {
+        return vec![];
+    };
     let current = current.to_string_lossy();
     names
         .iter()

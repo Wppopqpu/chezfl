@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::SystemTime;
 
 /// Check if a path exists and is a regular file.
 pub fn is_file(path: impl AsRef<Path>) -> anyhow::Result<bool> {
@@ -86,6 +87,56 @@ pub fn symlink(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> anyhow::Result<(
         std::fs::create_dir_all(parent)?;
     }
     Ok(std::os::unix::fs::symlink(src.as_ref(), dst.as_ref())?)
+}
+
+/// Get the modification time of a file as seconds since Unix epoch.
+///
+/// Returns `None` if the path does not exist or cannot be accessed
+/// (e.g. permission denied on a parent directory).
+pub fn mtime(path: impl AsRef<Path>) -> anyhow::Result<Option<u64>> {
+    match path.as_ref().metadata() {
+        Ok(meta) => {
+            let d = meta.modified()?.duration_since(SystemTime::UNIX_EPOCH)?;
+            Ok(Some(d.as_secs()))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Check whether a target is up-to-date with respect to its prerequisites,
+/// using the same logic as `make`: the target needs a rebuild when it does
+/// not exist, or when any prerequisite is newer (has a later mtime).
+///
+/// Missing prerequisites are treated as "needs rebuild" (returns `false`),
+/// since the build result cannot be verified without them.
+///
+/// # Example
+///
+/// ```rust
+/// use chezfl::tools::fs::{write, mtime, up_to_date};
+/// let tmp = std::env::temp_dir();
+/// let tgt = tmp.join("target");
+/// let pre = tmp.join("prereq");
+/// write(&tgt, "built").unwrap();
+/// write(&pre, "source").unwrap();
+/// // target is newer than prereq → up-to-date
+/// assert!(up_to_date(&tgt, &[&pre]).unwrap());
+/// ```
+pub fn up_to_date(target: impl AsRef<Path>, prerequisites: &[impl AsRef<Path>]) -> anyhow::Result<bool> {
+    let target_mtime = match mtime(&target)? {
+        Some(t) => t,
+        None => return Ok(false),
+    };
+
+    for prereq in prerequisites {
+        match mtime(prereq)? {
+            Some(m) if m <= target_mtime => continue,
+            _ => return Ok(false),
+        }
+    }
+
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -240,5 +291,60 @@ mod tests {
             d.parent().unwrap().parent().unwrap(),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn test_mtime() {
+        let f = std::env::temp_dir().join("chezfl_fs_test_mtime");
+        assert!(mtime(&f).unwrap().is_none());
+        write(&f, "content").unwrap();
+        assert!(mtime(&f).unwrap().is_some());
+        std::fs::remove_file(&f).unwrap();
+    }
+
+    #[test]
+    fn test_up_to_date_no_target() {
+        let tmp = std::env::temp_dir();
+        let tgt = tmp.join("chezfl_fs_test_uptodate_target");
+        let pre = tmp.join("chezfl_fs_test_uptodate_prereq");
+        write(&pre, "src").unwrap();
+        assert!(!up_to_date(&tgt, &[&pre]).unwrap());
+        std::fs::remove_file(&pre).unwrap();
+    }
+
+    #[test]
+    fn test_up_to_date_target_newer() {
+        let tmp = std::env::temp_dir();
+        let tgt = tmp.join("chezfl_fs_test_uptodate_newer_target");
+        let pre = tmp.join("chezfl_fs_test_uptodate_newer_prereq");
+        write(&pre, "src").unwrap();
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        write(&tgt, "built").unwrap();
+        assert!(up_to_date(&tgt, &[&pre]).unwrap());
+        std::fs::remove_file(&tgt).unwrap();
+        std::fs::remove_file(&pre).unwrap();
+    }
+
+    #[test]
+    fn test_up_to_date_prereq_newer() {
+        let tmp = std::env::temp_dir();
+        let tgt = tmp.join("chezfl_fs_test_uptodate_prereq_newer_target");
+        let pre = tmp.join("chezfl_fs_test_uptodate_prereq_newer_prereq");
+        write(&tgt, "built").unwrap();
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        write(&pre, "src").unwrap();
+        assert!(!up_to_date(&tgt, &[&pre]).unwrap());
+        std::fs::remove_file(&tgt).unwrap();
+        std::fs::remove_file(&pre).unwrap();
+    }
+
+    #[test]
+    fn test_up_to_date_missing_prereq() {
+        let tmp = std::env::temp_dir();
+        let tgt = tmp.join("chezfl_fs_test_uptodate_missing_prereq_target");
+        let pre = tmp.join("chezfl_fs_test_uptodate_missing_prereq_prereq");
+        write(&tgt, "built").unwrap();
+        assert!(!up_to_date(&tgt, &[&pre]).unwrap());
+        std::fs::remove_file(&tgt).unwrap();
     }
 }

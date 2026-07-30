@@ -59,4 +59,10 @@ impl Target {
         self.depends_on.push(target.into());
         self
     }
+
+    /// A stub target has neither a `check` function nor `depends_on`.
+    /// It is always unsatisfied unless manually set via `--set`.
+    pub fn is_stub(&self) -> bool {
+        self.check.is_none() && self.depends_on.is_empty()
+    }
 }

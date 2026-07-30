@@ -1,6 +1,6 @@
 # ADR-0005: Immediate Persistence of Manual Overrides
 
-**Status:** Accepted
+**Status:** Superseded by ADR-0006 (early-save timing kept; scope narrowed to stubs only)
 **Date:** 2026-07-30
 **Deciders:** chezfl maintainer
 

@@ -81,6 +81,17 @@ impl State {
         self.targets.remove(name);
     }
 
+    /// Copy an existing `TargetState` entry directly, preserving all fields
+    /// (including `manually_set`).
+    pub fn insert_entry(&mut self, name: &str, entry: TargetState) {
+        self.targets.insert(name.to_string(), entry);
+    }
+
+    /// Iterate over all persisted target entries.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &TargetState)> {
+        self.targets.iter()
+    }
+
     /// Record the result of a check or re-check.
     ///
     /// Preserves `manually_set` if the target was previously manually

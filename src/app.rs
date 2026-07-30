@@ -101,10 +101,20 @@ impl App {
 
     /// Persist state to the configured state file path.
     ///
+    /// Only stub targets (no check, no deps) are persisted. Leaf and
+    /// aggregate target state exists only in memory during the current run.
     /// Does nothing if no state path was configured (e.g., [`App::new`]).
     pub fn save_state(&self) -> anyhow::Result<()> {
         if let Some(path) = &self.state_path {
-            self.state.save_to(path)
+            let mut stub_state = State::default();
+            for target in self.targets.values() {
+                if target.is_stub()
+                    && let Some(ts) = self.state.get(&target.name)
+                {
+                    stub_state.insert_entry(&target.name, ts.clone());
+                }
+            }
+            stub_state.save_to(path)
         } else {
             Ok(())
         }
@@ -203,9 +213,7 @@ impl App {
             results.insert(name, sat);
         }
 
-        if let Some(path) = &self.state_path {
-            let _ = self.state.save_to(path);
-        }
+        let _ = self.save_state();
         steps
     }
 
@@ -314,9 +322,7 @@ impl App {
             }
         }
 
-        if let Some(path) = &self.state_path {
-            let _ = self.state.save_to(path);
-        }
+        let _ = self.save_state();
         steps
     }
 

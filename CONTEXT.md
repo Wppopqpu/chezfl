@@ -46,17 +46,19 @@ There is no rollback or uninstall support. Teardown is the user's responsibility
 *Avoid*: Job, script
 
 **State file**:
-chezfl persists target satisfaction state to a TOML file (default: `~/.local/state/chezfl/state.toml`). Each target stores whether it was last seen as satisfied (`satisfied`), when it was checked (`checked_at`), and whether it was manually overridden (`manually_set`).
+chezfl persists target satisfaction state to a TOML file (default: `~/.local/state/chezfl/state.toml`). **Only stub targets** (those with neither a `check` function nor `depends_on`) are persisted to disk. Leaf and aggregate target state lives only in memory during the current run.
+
+Each persisted entry stores whether the target was last satisfied (`satisfied`), when it was checked (`checked_at`), and whether it was manually overridden (`manually_set`).
 
 On `check` and `apply`, chezfl uses the following logic:
 - **Manual override** (`manually_set = true`): skip the check function entirely, return the manual value.
-- **Leaf target with cached satisfied state** (`satisfied = true`): skip the check function if all dependencies are still satisfied in the current run. Return "(cached)".
-- **All other cases**: run the check function. After the check, persist the result to the state file.
+- **Leaf target with in-memory cached satisfied state** (`satisfied = true` within the current run): skip the check function if all dependencies are still satisfied in the current run. Return "(cached)".
+- **All other cases**: run the check function.
 
-Aggregate targets are never cached — their satisfaction is always derived from their current dependencies' satisfaction. Writing state happens after every leaf-target check (not just after tasks run), ensuring the cache stays fresh.
+Aggregate targets are never cached — their satisfaction is always derived from their current dependencies' satisfaction. In-memory caching for leaf targets works within a single run: once checked, the result is reused for subsequent dependents and re-checks.
 
 **Manual override**:
-Users can set or unset a target's satisfaction via CLI: `--set <target>`, `--unset <target>`, `--recheck <target>`. Manually set targets skip their check function until explicitly rechecked. All manual overrides are persisted to the state file immediately (after processing all `--set`/`--unset`/`--recheck` flags), so they survive even if the subsequent subcommand crashes or doesn't save (e.g. `plan`).
+Users can set or unset a target's satisfaction via CLI: `--set <target>`, `--unset <target>`, `--recheck <target>`. Manually set targets skip their check function until explicitly rechecked. Manual overrides on **stub targets** are persisted to the state file immediately (after processing all `--set`/`--unset`/`--recheck` flags), so they survive across runs. Manual overrides on **leaf and aggregate targets** affect only the current run.
 
 **Configuration-as-Code**:
 Users declare targets and tasks by calling chezfl's Rust API directly from Rust source files. There is no separate config language, no YAML/TOML, and no DSL parser.

@@ -125,6 +125,11 @@ impl App {
         self.targets.values()
     }
 
+    /// Iterate over all registered tasks.
+    pub fn all_tasks(&self) -> impl Iterator<Item = &Task> {
+        self.tasks.values()
+    }
+
     /// Access the persisted state.
     pub fn state(&self) -> &State {
         &self.state

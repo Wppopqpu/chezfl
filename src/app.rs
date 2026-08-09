@@ -242,6 +242,8 @@ impl App {
     /// 2. For each target: check → if satisfied, skip.
     /// 3. If unsatisfied and a task exists (and is not disabled by label
     ///    filter, and its own dependency targets are satisfied), run the task.
+    ///    A task whose deps are unsatisfied does not run, but the target keeps
+    ///    its own check-derived status and nothing downstream is blocked.
     /// 4. After a successful task, re-check all targets it satisfies.
     /// 5. If a task fails, its targets are marked as skipped and all
     ///    downstream targets are also skipped (best-effort).
@@ -317,21 +319,17 @@ impl App {
                 continue;
             }
 
-            // Check task dependency targets
+            // Check task dependency targets. The task does not run until
+            // its deps are satisfied, but this never changes the target's
+            // own satisfaction status (it stays whatever its check reported)
+            // and never blocks downstream targets.
             let task_deps_ok = task
                 .depends_on
                 .iter()
                 .all(|dep| sat_map.get(dep.as_str()) == Some(&Satisfaction::Satisfied));
             if !task_deps_ok {
                 sat_map.insert(name, Satisfaction::Unsatisfied);
-                steps.push(self.mk_step(
-                    name,
-                    Satisfaction::Unsatisfied,
-                    "(task deps not satisfied)".to_string(),
-                ));
-                for sat in &task.satisfies {
-                    blocked.insert(sat);
-                }
+                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, cur_detail.clone()));
                 continue;
             }
 
@@ -409,18 +407,8 @@ impl App {
         let mut sat_map: HashMap<&str, Satisfaction> = HashMap::new();
         let mut would_satisfy: HashSet<&str> = HashSet::new();
         let mut steps = Vec::new();
-        let mut blocked: HashSet<&str> = HashSet::new();
 
         for name in &order {
-            if blocked.contains(name.as_str()) {
-                steps.push(self.mk_step(
-                    name,
-                    Satisfaction::Unsatisfied,
-                    "(would be skipped, upstream failure)".to_string(),
-                ));
-                continue;
-            }
-
             // If this target would already be satisfied by a previous task, skip
             if would_satisfy.contains(name.as_str()) {
                 sat_map.insert(name, Satisfaction::Satisfied);
@@ -465,21 +453,16 @@ impl App {
                 continue;
             }
 
-            // Check task deps
+            // Check task deps. Same rule as apply: the task does not run
+            // until its deps are satisfied, but the target keeps its own
+            // check-derived status and nothing downstream is blocked.
             let task_deps_ok = task.depends_on.iter().all(|dep| {
                 sat_map.get(dep.as_str()) == Some(&Satisfaction::Satisfied)
                     || would_satisfy.contains(dep.as_str())
             });
             if !task_deps_ok {
                 sat_map.insert(name, Satisfaction::Unsatisfied);
-                steps.push(self.mk_step(
-                    name,
-                    Satisfaction::Unsatisfied,
-                    "(task deps not satisfied)".to_string(),
-                ));
-                for sat in &task.satisfies {
-                    blocked.insert(sat);
-                }
+                steps.push(self.mk_step(name, Satisfaction::Unsatisfied, cur_detail.clone()));
                 continue;
             }
 
@@ -1076,5 +1059,98 @@ mod tests {
             steps.iter().any(|s| s.detail.contains("task already ran")),
             "second unsatisfied target should be reported as already-attempted"
         );
+    }
+
+    #[test]
+    fn test_task_deps_do_not_block_when_check_satisfied() {
+        let mut app = App::new();
+        let task_ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let tr = task_ran.clone();
+
+        app.target(Target::new("dep").check(|| Ok(false)));
+        app.target(Target::new("leaf").check(|| Ok(true)));
+        app.task(
+            Task::new("t")
+                .satisfies("leaf")
+                .depends_on("dep")
+                .run(move || {
+                    tr.store(true, std::sync::atomic::Ordering::SeqCst);
+                    Ok(())
+                }),
+        );
+
+        app.validate().unwrap();
+        let steps = app.run_apply(&make_config(), &[]);
+
+        assert!(
+            !task_ran.load(std::sync::atomic::Ordering::SeqCst),
+            "task must not run when its check is already satisfied"
+        );
+        let leaf = steps.iter().find(|s| s.name == "leaf").unwrap();
+        assert_eq!(leaf.sat, Satisfaction::Satisfied);
+        assert!(!leaf.detail.contains("task deps"));
+    }
+
+    #[test]
+    fn test_task_deps_keep_target_check_status_and_no_cascade() {
+        let mut app = App::new();
+        let task_ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let tr = task_ran.clone();
+
+        app.target(Target::new("dep").check(|| Ok(false)));
+        app.target(Target::new("a").check(|| Ok(false)));
+        app.target(Target::new("b").check(|| Ok(false)));
+        app.task(
+            Task::new("T")
+                .satisfies("a")
+                .satisfies("b")
+                .depends_on("dep")
+                .run(move || {
+                    tr.store(true, std::sync::atomic::Ordering::SeqCst);
+                    Ok(())
+                }),
+        );
+
+        app.validate().unwrap();
+        let steps = app.run_apply(&make_config(), &[]);
+
+        assert!(
+            !task_ran.load(std::sync::atomic::Ordering::SeqCst),
+            "task must not run while its deps are unsatisfied"
+        );
+        // Both targets keep their own check-derived status; neither the
+        // "task deps not satisfied" reason nor the downstream block appears.
+        for s in &steps {
+            assert!(!s.detail.contains("task deps"), "got: {}", s.detail);
+            assert!(
+                !s.detail.contains("skipped, upstream failure"),
+                "got: {}",
+                s.detail
+            );
+            assert_eq!(s.sat, Satisfaction::Unsatisfied);
+        }
+    }
+
+    #[test]
+    fn test_plan_task_deps_keep_target_check_status() {
+        let mut app = App::new();
+        app.target(Target::new("dep").check(|| Ok(false)));
+        app.target(Target::new("a").check(|| Ok(false)));
+        app.target(Target::new("b").check(|| Ok(false)));
+        app.task(
+            Task::new("T")
+                .satisfies("a")
+                .satisfies("b")
+                .depends_on("dep"),
+        );
+
+        app.validate().unwrap();
+        let steps = app.run_plan(&make_config(), &[]);
+
+        for s in &steps {
+            assert!(!s.detail.contains("task deps"), "got: {}", s.detail);
+            assert!(!s.detail.contains("would be skipped"), "got: {}", s.detail);
+            assert_eq!(s.sat, Satisfaction::Unsatisfied);
+        }
     }
 }

@@ -7,7 +7,8 @@
 /// [`Target`](crate::Target) `check` functions.
 ///
 /// Available tools:
-/// - [`git`] — clone, pull, fetch, status, is_clean, is_git_repo, is_up_to_date_with_git
+/// - [`git`] — clone, CloneOptions, pull, fetch, status, is_clean,
+///   switch, switch_create, is_git_repo, is_up_to_date_with_git
 /// - [`cargo`] — install, install_path, install_root, install_force, is_installed
 /// - [`yay`] — install, remove, update, is_installed
 /// - [`stow`] — stow, unstow, restow, stow_everything, is_stowed, is_everything_stowed

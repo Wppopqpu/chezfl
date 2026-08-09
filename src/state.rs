@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 /// Persisted state for a single target.
@@ -48,10 +49,13 @@ impl State {
     /// Persist state to the given file path.
     pub fn save_to(&self, path: &std::path::Path) -> anyhow::Result<()> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("failed to create state directory {}", parent.display())
+            })?;
         }
-        let content = toml::to_string_pretty(self)?;
-        std::fs::write(path, content)?;
+        let content = toml::to_string_pretty(self).context("failed to serialize state to TOML")?;
+        std::fs::write(path, content)
+            .with_context(|| format!("failed to write state to {}", path.display()))?;
         Ok(())
     }
 

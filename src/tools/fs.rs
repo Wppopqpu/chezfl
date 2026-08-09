@@ -1,6 +1,8 @@
 use std::path::Path;
 use std::time::SystemTime;
 
+use anyhow::Context;
+
 /// Check if a path exists and is a regular file.
 pub fn is_file(path: impl AsRef<Path>) -> anyhow::Result<bool> {
     Ok(path
@@ -49,52 +51,76 @@ pub fn exists(path: impl AsRef<Path>) -> anyhow::Result<bool> {
 
 /// Read a file's contents into a `String`.
 pub fn read_to_string(path: impl AsRef<Path>) -> anyhow::Result<String> {
-    Ok(std::fs::read_to_string(path.as_ref())?)
+    std::fs::read_to_string(path.as_ref())
+        .with_context(|| format!("failed to read {}", path.as_ref().display()))
 }
 
 /// Write a string to a file, creating parent directories if needed.
 pub fn write(path: impl AsRef<Path>, content: &str) -> anyhow::Result<()> {
     if let Some(parent) = path.as_ref().parent() {
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create parent dir {}", parent.display()))?;
     }
-    Ok(std::fs::write(path.as_ref(), content)?)
+    std::fs::write(path.as_ref(), content)
+        .with_context(|| format!("failed to write {}", path.as_ref().display()))
 }
 
 /// Copy a file from `src` to `dst`, creating parent directories if needed.
 pub fn copy(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> anyhow::Result<()> {
     if let Some(parent) = dst.as_ref().parent() {
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create parent dir {}", parent.display()))?;
     }
-    Ok(std::fs::copy(src.as_ref(), dst.as_ref()).map(|_| ())?)
+    std::fs::copy(src.as_ref(), dst.as_ref())
+        .map(|_| ())
+        .with_context(|| {
+            format!(
+                "failed to copy {} to {}",
+                src.as_ref().display(),
+                dst.as_ref().display()
+            )
+        })?;
+    Ok(())
 }
 
 /// Remove a file or empty directory.
 pub fn remove(path: impl AsRef<Path>) -> anyhow::Result<()> {
     let path = path.as_ref();
     if path.is_dir() {
-        Ok(std::fs::remove_dir(path)?)
+        Ok(std::fs::remove_dir(path)
+            .with_context(|| format!("failed to remove directory {}", path.display()))?)
     } else {
-        Ok(std::fs::remove_file(path)?)
+        Ok(std::fs::remove_file(path)
+            .with_context(|| format!("failed to remove file {}", path.display()))?)
     }
 }
 
 /// Recursively remove a file or directory.
 pub fn remove_all(path: impl AsRef<Path>) -> anyhow::Result<()> {
-    Ok(std::fs::remove_dir_all(path.as_ref())?)
+    std::fs::remove_dir_all(path.as_ref())
+        .with_context(|| format!("failed to remove {}", path.as_ref().display()))
 }
 
 /// Create a directory and all parents (like `mkdir -p`).
 pub fn create_dir(path: impl AsRef<Path>) -> anyhow::Result<()> {
-    Ok(std::fs::create_dir_all(path.as_ref())?)
+    std::fs::create_dir_all(path.as_ref())
+        .with_context(|| format!("failed to create directory {}", path.as_ref().display()))
 }
 
 /// Create a symbolic link `src → dst`.
 #[cfg(unix)]
 pub fn symlink(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> anyhow::Result<()> {
     if let Some(parent) = dst.as_ref().parent() {
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create parent dir {}", parent.display()))?;
     }
-    Ok(std::os::unix::fs::symlink(src.as_ref(), dst.as_ref())?)
+    std::os::unix::fs::symlink(src.as_ref(), dst.as_ref()).with_context(|| {
+        format!(
+            "failed to symlink {} -> {}",
+            src.as_ref().display(),
+            dst.as_ref().display()
+        )
+    })
 }
 
 /// Get the modification time of a file as seconds since Unix epoch.
@@ -104,11 +130,19 @@ pub fn symlink(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> anyhow::Result<(
 pub fn mtime(path: impl AsRef<Path>) -> anyhow::Result<Option<u64>> {
     match path.as_ref().metadata() {
         Ok(meta) => {
-            let d = meta.modified()?.duration_since(SystemTime::UNIX_EPOCH)?;
-            Ok(Some(d.as_secs()))
+            let d = meta
+                .modified()
+                .with_context(|| format!("failed to read mtime of {}", path.as_ref().display()))?;
+            let dur = d.duration_since(SystemTime::UNIX_EPOCH).with_context(|| {
+                format!(
+                    "mtime of {} predates the unix epoch",
+                    path.as_ref().display()
+                )
+            })?;
+            Ok(Some(dur.as_secs()))
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(e.into()),
+        Err(e) => Err(e).with_context(|| format!("failed to stat {}", path.as_ref().display())),
     }
 }
 

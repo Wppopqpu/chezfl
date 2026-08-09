@@ -5,6 +5,8 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
 use std::time::Duration;
 
+use anyhow::Context;
+
 /// The result of a command execution.
 ///
 /// For captured runs ([`Cmd::run`]) both `stdout` and `stderr` contain the
@@ -183,7 +185,10 @@ impl Cmd {
     /// No timeout — simplest path.
     fn run_direct(&self, interactive: bool) -> anyhow::Result<Output> {
         if interactive {
-            let mut child = self.build(true).spawn()?;
+            let mut child = self
+                .build(true)
+                .spawn()
+                .with_context(|| format!("failed to run `{}`", self.program))?;
             let status = child.wait()?;
             Ok(Output {
                 status,
@@ -191,7 +196,10 @@ impl Cmd {
                 stderr: String::new(),
             })
         } else {
-            let std_output = self.build(false).output()?;
+            let std_output = self
+                .build(false)
+                .output()
+                .with_context(|| format!("failed to run `{}`", self.program))?;
             Ok(Output {
                 status: std_output.status,
                 stdout: String::from_utf8_lossy(&std_output.stdout).to_string(),
@@ -215,7 +223,7 @@ impl Cmd {
                 stdout: String::from_utf8_lossy(&out.stdout).to_string(),
                 stderr: String::from_utf8_lossy(&out.stderr).to_string(),
             }),
-            Ok(Err(e)) => Err(e.into()),
+            Ok(Err(e)) => Err(e).with_context(|| format!("failed to run `{}`", self.program)),
             Err(RecvTimeoutError::Timeout) => {
                 anyhow::bail!(
                     "`{} {}` timed out after {dur:?}",
@@ -231,7 +239,10 @@ impl Cmd {
 
     /// Interactive mode with timeout — kill by PID.
     fn exec_with_timeout(&self, dur: Duration) -> anyhow::Result<Output> {
-        let mut child = self.build(true).spawn()?;
+        let mut child = self
+            .build(true)
+            .spawn()
+            .with_context(|| format!("failed to run `{}`", self.program))?;
         let pid = child.id();
         let (tx, rx) = mpsc::channel::<std::io::Result<ExitStatus>>();
 
@@ -245,7 +256,7 @@ impl Cmd {
                 stdout: String::new(),
                 stderr: String::new(),
             }),
-            Ok(Err(e)) => Err(e.into()),
+            Ok(Err(e)) => Err(e).with_context(|| format!("failed to run `{}`", self.program)),
             Err(RecvTimeoutError::Timeout) => {
                 kill_pid(pid);
                 let _ = rx.recv_timeout(Duration::from_secs(5));

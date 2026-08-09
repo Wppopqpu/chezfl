@@ -41,8 +41,11 @@ pub fn restow(from: impl AsRef<Path>, to: impl AsRef<Path>, package: &str) -> Re
 /// Non-interactive — output is captured.
 pub fn stow_everything(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
     let from = from.as_ref();
-    for entry in std::fs::read_dir(from)? {
-        let entry = entry?;
+    for entry in std::fs::read_dir(from)
+        .with_context(|| format!("failed to read stow directory {}", from.display()))?
+    {
+        let entry =
+            entry.with_context(|| format!("failed to read stow directory {}", from.display()))?;
         if entry.file_type()?.is_dir() {
             let package = entry.file_name().to_string_lossy().into_owned();
             stow(from, &to, &package)?;
@@ -62,11 +65,14 @@ pub fn stow_everything(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(
 pub fn is_stowed(from: impl AsRef<Path>, to: impl AsRef<Path>, package: &str) -> Result<bool> {
     let from = from.as_ref();
     let to = to.as_ref();
-    let Ok(entries) = std::fs::read_dir(from.join(package)) else {
+    let package_dir = from.join(package);
+    let Ok(entries) = std::fs::read_dir(&package_dir) else {
         return Ok(false);
     };
     for entry in entries {
-        let entry = entry?;
+        let entry = entry.with_context(|| {
+            format!("failed to read package directory {}", package_dir.display())
+        })?;
         let link = to.join(entry.file_name());
         let is_link = link
             .symlink_metadata()
@@ -91,7 +97,8 @@ pub fn is_everything_stowed(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Res
         return Ok(false);
     };
     for entry in entries {
-        let entry = entry?;
+        let entry =
+            entry.with_context(|| format!("failed to read stow directory {}", from.display()))?;
         if entry.file_type()?.is_dir() {
             let package = entry.file_name().to_string_lossy().into_owned();
             if !is_stowed(from, to, &package)? {

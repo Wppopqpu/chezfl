@@ -10,6 +10,7 @@ pub mod macros;
 pub mod state;
 pub mod target;
 pub mod task;
+pub mod term;
 pub mod tools;
 
 pub use app::{App, Config};
@@ -112,6 +113,7 @@ pub fn run_cli(app: &mut App) -> anyhow::Result<()> {
             Some(cli.label)
         },
         exclude_labels: cli.exclude_label,
+        show_descriptions: cli.show_descriptions,
     };
 
     app.validate()?;
@@ -157,76 +159,29 @@ fn parse_set_flag(s: &str) -> anyhow::Result<(String, bool)> {
 }
 
 fn print_steps(steps: &[Step], is_plan: bool, show_descriptions: bool) {
-    use std::io::IsTerminal;
-
-    let color = std::io::stdout().is_terminal();
-
-    let green = |s: &str| {
-        if color {
-            format!("\x1b[32m{s}\x1b[0m")
-        } else {
-            s.to_string()
-        }
-    };
-    let red = |s: &str| {
-        if color {
-            format!("\x1b[31m{s}\x1b[0m")
-        } else {
-            s.to_string()
-        }
-    };
-    let yellow = |s: &str| {
-        if color {
-            format!("\x1b[33m{s}\x1b[0m")
-        } else {
-            s.to_string()
-        }
-    };
-    let dim = |s: &str| {
-        if color {
-            format!("\x1b[2m{s}\x1b[0m")
-        } else {
-            s.to_string()
-        }
-    };
-    let red_strike = |s: &str| {
-        if color {
-            format!("\x1b[31;9m{s}\x1b[0m")
-        } else {
-            s.to_string()
-        }
-    };
-    let bold = |s: &str| {
-        if color {
-            format!("\x1b[1m{s}\x1b[0m")
-        } else {
-            s.to_string()
-        }
-    };
-
     for step in steps {
         let icon = match step.sat {
-            crate::Satisfaction::Satisfied => green("✓"),
-            crate::Satisfaction::Unsatisfied => red("✗"),
+            crate::Satisfaction::Satisfied => term::green("✓"),
+            crate::Satisfaction::Unsatisfied => term::red("✗"),
         };
-        let name = bold(&step.name);
+        let name = term::bold(&step.name);
         let detail = if step.detail.is_empty() {
             String::new()
         } else {
-            format!("  {}", dim(&format!("({})", step.detail)))
+            format!("  {}", term::dim(&format!("({})", step.detail)))
         };
         let desc = match &step.description {
             Some(d) if show_descriptions || step.sat == crate::Satisfaction::Unsatisfied => {
                 if step.sat == crate::Satisfaction::Unsatisfied {
-                    format!("  {}", red_strike(d))
+                    format!("  {}", term::red_strike(d))
                 } else {
-                    format!("  {}", dim(d))
+                    format!("  {}", term::dim(d))
                 }
             }
             _ => String::new(),
         };
         let prefix = if is_plan {
-            format!("{} ", yellow("(P)"))
+            format!("{} ", term::yellow("(P)"))
         } else {
             String::new()
         };

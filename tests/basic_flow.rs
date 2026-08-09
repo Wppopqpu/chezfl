@@ -95,6 +95,7 @@ fn test_label_filter_disables_task() {
     let config = Config {
         label_filter: None,
         exclude_labels: vec!["slow".to_string()],
+        show_descriptions: false,
     };
     let steps = app.run_apply(&config, &[]);
 

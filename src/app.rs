@@ -15,6 +15,8 @@ pub struct Config {
     pub label_filter: Option<Vec<String>>,
     /// Exclude tasks that have any of these labels.
     pub exclude_labels: Vec<String>,
+    /// Show task descriptions while running (dim).
+    pub show_descriptions: bool,
 }
 
 /// A registry of targets and tasks, and the execution engine.
@@ -335,10 +337,21 @@ impl App {
 
             // Run task
             ran_tasks.insert(task.name.clone());
+            println!("▶ {}", crate::term::bold(&task.name));
             let ran_ok = match &task.run {
                 Some(run) => run().is_ok(),
                 None => true,
             };
+
+            // Description mirrors the target output rules: hidden unless
+            // --show-descriptions (dim), always red-strikethrough on failure.
+            if let Some(description) = &task.description {
+                if !ran_ok {
+                    println!("  {}", crate::term::red_strike(description));
+                } else if config.show_descriptions {
+                    println!("  {}", crate::term::dim(description));
+                }
+            }
 
             // Re-check all targets this task satisfies
             for sat_name in &task.satisfies {

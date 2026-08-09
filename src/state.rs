@@ -76,7 +76,7 @@ impl State {
 
     /// Remove a target's persisted state (next check will re-run).
     ///
-    /// This is used by the `--unset` and `--recheck` CLI flags.
+    /// This is used by the `--unset` CLI flag.
     pub fn unset(&mut self, name: &str) {
         self.targets.remove(name);
     }

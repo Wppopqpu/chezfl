@@ -46,7 +46,7 @@ fn complete_labels(current: &OsStr) -> Vec<CompletionCandidate> {
 /// Every subcommand supports execution filters
 /// ([`--label`](Cli::label)/[`--exclude-label`](Cli::exclude_label))
 /// and state overrides
-/// ([`--set`](Cli::set)/[`--unset`](Cli::unset)/[`--recheck`](Cli::recheck)).
+/// ([`--set`](Cli::set)/[`--unset`](Cli::unset)).
 #[derive(Parser)]
 #[command(name = "chezfl", version)]
 pub struct Cli {
@@ -68,10 +68,6 @@ pub struct Cli {
     /// Manually unset target satisfaction
     #[arg(long, global = true, value_name = "TARGET", add = ArgValueCompleter::new(complete_targets))]
     pub unset: Vec<String>,
-
-    /// Re-check a target (clear cached state)
-    #[arg(long, global = true, value_name = "TARGET", add = ArgValueCompleter::new(complete_targets))]
-    pub recheck: Vec<String>,
 
     /// Show target descriptions (always shown for unsatisfied targets)
     #[arg(long, global = true, default_value_t = false)]

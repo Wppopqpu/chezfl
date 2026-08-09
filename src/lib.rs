@@ -91,7 +91,7 @@ pub fn run_cli(app: &mut App) -> anyhow::Result<()> {
         }
     }
 
-    // Handle --set / --unset / --recheck
+    // Handle --set / --unset
     for s in &cli.set {
         if let Some((name, _)) = s.split_once('=') {
             app.state_mut().set(name, true);
@@ -102,12 +102,9 @@ pub fn run_cli(app: &mut App) -> anyhow::Result<()> {
     for s in &cli.unset {
         app.state_mut().unset(s);
     }
-    for s in &cli.recheck {
-        app.state_mut().unset(s);
-    }
     // Persist immediately so manual overrides survive even if a later
     // subcommand crashes or doesn't save (e.g. plan).
-    if !cli.set.is_empty() || !cli.unset.is_empty() || !cli.recheck.is_empty() {
+    if !cli.set.is_empty() || !cli.unset.is_empty() {
         let _ = app.save_state();
     }
 

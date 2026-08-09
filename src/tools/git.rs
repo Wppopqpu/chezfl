@@ -148,12 +148,17 @@ pub fn is_clean(dir: impl AsRef<Path>) -> anyhow::Result<bool> {
 /// Check whether `dir` is inside a git work tree.
 ///
 /// Uses `git rev-parse --is-inside-work-tree`. Non-interactive. Suitable
-/// for use in a target's `check` function.
+/// for use in a target's `check` function. A missing or non-repo `dir`, or
+/// a git failure, reports `false` rather than an error — the repo simply
+/// is not there yet.
 pub fn is_git_repo(dir: impl AsRef<Path>) -> anyhow::Result<bool> {
     let dir = dir.as_ref().to_string_lossy().to_string();
-    let out = cmd("git")
+    let Ok(out) = cmd("git")
         .args(&["-C", &dir, "rev-parse", "--is-inside-work-tree"])
-        .run()?;
+        .run()
+    else {
+        return Ok(false);
+    };
     Ok(out.stdout.trim() == "true")
 }
 

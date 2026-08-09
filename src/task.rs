@@ -10,8 +10,10 @@ pub type RunFn = Arc<dyn Fn() -> anyhow::Result<()> + Send + Sync>;
 ///   [`run`](Task::depends_on) (dependency on *targets*, not other tasks)
 /// - [`labels`](Task::label) for filtering and disabling
 ///
-/// Tasks are **idempotent** — designed to be run repeatedly. Execution is
-/// **serial** to support interactive programs. There is no rollback.
+/// Tasks are **not presumed idempotent** — a task is never run twice within a
+/// single `apply` invocation, and tasks that fail to satisfy a target are not
+/// retried automatically. Execution is **serial** to support interactive
+/// programs. There is no rollback.
 #[derive(Clone)]
 pub struct Task {
     pub name: String,
@@ -71,7 +73,8 @@ impl Task {
 
     /// Set the run function.
     ///
-    /// The closure should be idempotent. stdout/stderr are forwarded to
+    /// The closure need not be idempotent: chezfl runs each task at most once
+    /// per `apply` invocation. stdout/stderr are forwarded to
     /// the terminal; stdin is passed through so interactive programs
     /// (e.g. `yay`, `sudo`) work normally.
     pub fn run<F>(mut self, f: F) -> Self

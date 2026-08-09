@@ -244,12 +244,17 @@ impl App {
     /// 5. If a task fails, its targets are marked as skipped and all
     ///    downstream targets are also skipped (best-effort).
     ///
+    /// Each task runs **at most once** per invocation — a task whose target
+    /// remains unsatisfied after it ran is not run again, even if the same
+    /// task also satisfies other unsatisfied targets.
+    ///
     /// State is persisted automatically if a `state_path` was configured.
     pub fn run_apply(&mut self, config: &Config, names: &[String]) -> Vec<Step> {
         let order = self.topo_order(names);
         let mut sat_map: HashMap<&str, Satisfaction> = HashMap::new();
         let mut steps = Vec::new();
         let mut blocked: HashSet<&str> = HashSet::new();
+        let mut ran_tasks: HashSet<String> = HashSet::new();
 
         for name in &order {
             if blocked.contains(name.as_str()) {
@@ -296,6 +301,20 @@ impl App {
                 continue;
             }
 
+            // Each task runs at most once per apply invocation. If it already
+            // ran (for an earlier target it satisfies) and this target is
+            // still unsatisfied, do not run it again — tasks are not presumed
+            // to be re-runnable.
+            if ran_tasks.contains(&task.name) {
+                sat_map.insert(name, Satisfaction::Unsatisfied);
+                steps.push(self.mk_step(
+                    name,
+                    Satisfaction::Unsatisfied,
+                    "(task already ran, target still unsatisfied)".to_string(),
+                ));
+                continue;
+            }
+
             // Check task dependency targets
             let task_deps_ok = task
                 .depends_on
@@ -315,6 +334,7 @@ impl App {
             }
 
             // Run task
+            ran_tasks.insert(task.name.clone());
             let ran_ok = match &task.run {
                 Some(run) => run().is_ok(),
                 None => true,
@@ -1016,5 +1036,32 @@ mod tests {
         assert_eq!(steps2[0].sat, Satisfaction::Satisfied);
         assert!(steps2[0].detail.contains("cached"));
         assert!(!check_called.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_task_runs_at_most_once_per_apply() {
+        let mut app = App::new();
+        let runs = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let r = runs.clone();
+
+        app.target(Target::new("A").check(|| Ok(false)));
+        app.target(Target::new("B").check(|| Ok(false)));
+        app.task(Task::new("T").satisfies("A").satisfies("B").run(move || {
+            r.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }));
+
+        app.validate().unwrap();
+        let steps = app.run_apply(&make_config(), &[]);
+
+        assert_eq!(
+            runs.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "task must run at most once per apply"
+        );
+        assert!(
+            steps.iter().any(|s| s.detail.contains("task already ran")),
+            "second unsatisfied target should be reported as already-attempted"
+        );
     }
 }

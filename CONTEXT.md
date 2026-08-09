@@ -47,7 +47,7 @@ An actionable unit that **satisfies one or more targets** (1-to-many). A task de
 
 A task **never runs** for targets that are in stub state (whether originally stub, or demoted from leaf by a failed check or an unsatisfied check dep). Stub targets that have a `satisfies` declaration are simply skipped — no error is raised.
 
-Tasks have **labels** used for filtering and disabling. A disabled task is completely ignored — its targets are skipped. A task should be idempotent, designed to be run repeatedly. Its run function signature is `fn() -> anyhow::Result<()>`.
+Tasks have **labels** used for filtering and disabling. A disabled task is completely ignored — its targets are skipped. A task is **not presumed idempotent or re-runnable**: chezfl guarantees each task executes **at most once per `apply` invocation**. If a task ran for one target but another target it satisfies is still unsatisfied, the task is not run again for it — that target is left unsatisfied until the user intervenes. Its run function signature is `fn() -> anyhow::Result<()>`.
 
 Task execution is **serial** (one at a time) — interactive programs like `yay` may prompt the user during execution. chezfl forwards stdin to task processes and captures/displays stdout and stderr along with the command being run.
 
@@ -79,7 +79,7 @@ chezfl supports two API styles:
 
 Both produce the same runtime model. Users compile their config into a binary and run subcommands:
 
-- `./chezfl [apply]` — default: check all targets, run tasks for unsatisfied ones, re-check after each task
+- `./chezfl [apply]` — default: check all targets, run tasks for unsatisfied ones, re-check after each task. Each task runs at most once per invocation.
 - `./chezfl check [target...]` — check targets (default all), report satisfaction state
 - `./chezfl plan` — dry-run: simulate task execution (assume satisfied after) without side effects, output in text-tree format
 - `./chezfl check --label foo --exclude-label bar` — filter targets by task labels

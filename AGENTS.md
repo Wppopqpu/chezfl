@@ -30,7 +30,7 @@ cargo clippy -- -D warnings  # lint (run after fmt)
 
 - **Target** — a concrete desired state. Three kinds: leaf (has check + optional check_dep), aggregate (no check, satisfaction from depends_on), and stub (no check, no deps, always unsatisfied unless --set). Each target is satisfied by exactly one task. Targets form an acyclic dependency DAG.
 - **Check dependency** (`check_dep`) — declared on a leaf target. All check deps must be satisfied before the check runs. If any check dep is unsatisfied, or if the check returns false, the leaf is demoted to stub (no task runs).
-- **Task** — satisfies 1+ targets, depends on targets (not tasks), has labels for filtering. Serial execution, idempotent, stdin-forwarded. No rollback. Tasks never run for stub targets (original or demoted).
+- **Task** — satisfies 1+ targets, depends on targets (not tasks), has labels for filtering. Serial execution, at most once per `apply` invocation (never presumed re-runnable), stdin-forwarded. No rollback. Tasks never run for stub targets (original or demoted).
 - **State** — persisted in TOML (`~/.local/state/chezfl/state.toml`). Supports manual override via `--set`/`--unset`/`--recheck`. Check caching: leaf targets skip check when previously satisfied + deps unchanged.
 - **Description** — optional human-readable string on targets and tasks via `.description("text")`. Shown always for unsatisfied targets; opt-in via `--show-descriptions` flag.
 - **CLI** — `./chezfl [apply]`, `./chezfl check [target...]`, `./chezfl plan`. Supports `--label`, `--exclude-label`, `--show-descriptions`, `--no-banner`.

@@ -93,11 +93,8 @@ pub fn run_cli(app: &mut App) -> anyhow::Result<()> {
 
     // Handle --set / --unset
     for s in &cli.set {
-        if let Some((name, _)) = s.split_once('=') {
-            app.state_mut().set(name, true);
-        } else {
-            app.state_mut().set(s, true);
-        }
+        let (name, value) = parse_set_flag(s)?;
+        app.state_mut().set(&name, value);
     }
     for s in &cli.unset {
         app.state_mut().unset(s);
@@ -141,6 +138,22 @@ pub fn run_cli(app: &mut App) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Parse a `--set` flag value: `NAME` pins `true`, `NAME=bool` pins the
+/// given value.
+fn parse_set_flag(s: &str) -> anyhow::Result<(String, bool)> {
+    match s.split_once('=') {
+        Some((name, value)) => {
+            let value = value.parse::<bool>().map_err(|_| {
+                anyhow::anyhow!(
+                    "invalid --set value '{value}' for '{name}', expected true or false"
+                )
+            })?;
+            Ok((name.to_string(), value))
+        }
+        None => Ok((s.to_string(), true)),
+    }
 }
 
 fn print_steps(steps: &[Step], is_plan: bool, show_descriptions: bool) {
@@ -218,5 +231,33 @@ fn print_steps(steps: &[Step], is_plan: bool, show_descriptions: bool) {
             String::new()
         };
         println!("{}{} {}{}{}", prefix, icon, name, desc, detail);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_set_flag;
+
+    #[test]
+    fn parse_set_plain_name_defaults_true() {
+        assert_eq!(parse_set_flag("foo").unwrap(), ("foo".to_string(), true));
+    }
+
+    #[test]
+    fn parse_set_honors_bool_value() {
+        assert_eq!(
+            parse_set_flag("foo=true").unwrap(),
+            ("foo".to_string(), true)
+        );
+        assert_eq!(
+            parse_set_flag("foo=false").unwrap(),
+            ("foo".to_string(), false)
+        );
+    }
+
+    #[test]
+    fn parse_set_rejects_invalid_value() {
+        let err = parse_set_flag("foo=yes").unwrap_err();
+        assert!(err.to_string().contains("expected true or false"));
     }
 }

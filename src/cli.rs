@@ -61,11 +61,11 @@ pub struct Cli {
     #[arg(long, global = true, add = ArgValueCompleter::new(complete_labels))]
     pub exclude_label: Vec<String>,
 
-    /// Manually set target satisfaction
-    #[arg(long, global = true, value_name = "TARGET", add = ArgValueCompleter::new(complete_targets))]
+    /// Manually set target satisfaction (`NAME` or `NAME=bool`)
+    #[arg(long, global = true, value_name = "NAME=BOOL", add = ArgValueCompleter::new(complete_targets))]
     pub set: Vec<String>,
 
-    /// Manually unset target satisfaction
+    /// Remove stored state for a target (next check will re-run)
     #[arg(long, global = true, value_name = "TARGET", add = ArgValueCompleter::new(complete_targets))]
     pub unset: Vec<String>,
 

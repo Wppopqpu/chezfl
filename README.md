@@ -249,7 +249,6 @@ Flags (every command):
   --exclude-label <LABEL> Exclude tasks with this label (repeatable)
   --set <NAME=bool>       Manually set target state (bypasses check, repeatable)
   --unset <NAME>          Remove stored state for a target (repeatable)
-  --recheck <NAME>        Alias for --unset, forces re-check (repeatable)
 ```
 
 ### Examples
@@ -270,8 +269,8 @@ cargo run -- apply --exclude-label system
 # Manually mark a target as satisfied
 cargo run -- check --set docker_installed=true
 
-# Force re-check
-cargo run -- check --recheck docker_installed
+# Clear stored state (next check runs fresh)
+cargo run -- check --unset docker_installed
 ```
 
 ## Domain Model

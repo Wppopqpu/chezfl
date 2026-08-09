@@ -9,7 +9,7 @@ chezfl fills the gap that tools like `stow` (dotfile symlinks) cannot cover: pac
 **Target**:
 A declaration of a **concrete** desired state. Each target has a unique **name** (string identifier). A target is exactly one of three kinds:
 
-- **Leaf target**: has a **check** function (`fn() -> anyhow::Result<bool>`) that probes the real system. `Ok(true)` = satisfied, `Ok(false)` = unsatisfied, `Err` = check itself failed. Optionally declares **check dependencies** (see below). No `depends_on`. When `check` returns `false`, or when any check dep is unsatisfied, the target is **demoted to stub** (unsatisfied, no task execution).
+- **Leaf target**: has a **check** function (`fn() -> anyhow::Result<bool>`) that probes the real system. `Ok(true)` = satisfied, `Ok(false)` = unsatisfied, `Err` = check itself failed. Optionally declares **check dependencies** (see below). No `depends_on`. When `check` returns `false`, or when any check dep is unsatisfied, the target is **demoted to stub** (unsatisfied, no task execution). A leaf target's satisfaction status is decided **solely by its own check and check deps** — the `depends_on` of the task that would satisfy it plays no part (see Task).
 - **Aggregate target**: no `check`. Its satisfaction is derived entirely from its `depends_on` — satisfied when **all** dependencies are satisfied. An aggregate with zero dependencies is always unsatisfied (needs a task to satisfy it, or deps to derive from).
 - **Stub target**: neither `check` nor `depends_on`. Always unsatisfied, can be satisfied only via `--set` (persisted across runs). A task may declare `satisfies` for a stub target, but will **never run** for it (see Task).
 
@@ -44,6 +44,8 @@ Tools that modify the system are **interactive by default** — they use [`exec(
 
 **Task**:
 An actionable unit that **satisfies one or more targets** (1-to-many). A task declares which targets it satisfies and which other targets must be satisfied before it can run. A task does NOT depend on other tasks — only on targets.
+
+A task's `depends_on` gates **only when the task runs** — the task will not execute until those targets report satisfied. It never affects the satisfaction status of the targets it satisfies: a leaf target's status is decided solely by its own check and check deps, and an unsatisfied task dependency never cascades to block downstream targets. If a task's deps are unsatisfied, the task simply does not run and its targets remain exactly as their checks report them.
 
 A task **never runs** for targets that are in stub state (whether originally stub, or demoted from leaf by a failed check or an unsatisfied check dep). Stub targets that have a `satisfies` declaration are simply skipped — no error is raised.
 

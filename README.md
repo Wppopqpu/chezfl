@@ -392,7 +392,9 @@ A **Target** is a concrete desired state. Three kinds:
   (e.g. "is ripgrep installed?"). Optionally declares **check dependencies**
   (`check_dep`) — the check only runs when all check deps are satisfied.
   If a check dep is unsatisfied, or if the check returns `false`, the leaf
-  is demoted to stub (cannot be satisfied by a task).
+  is demoted to stub (cannot be satisfied by a task). A leaf's status is
+  decided **solely** by its own check and check deps — never by whether its
+  satisfying task is able to run.
 - **Aggregate target** — no check; satisfied when all its `depends_on`
   dependencies are satisfied. Useful for grouping. Tasks satisfy aggregates.
 - **Stub target** — neither check nor deps; always unsatisfied unless
@@ -411,7 +413,10 @@ A **Task** is an actionable unit that satisfies 1+ targets.
 - Has a `run` closure (at most once per apply, serial, stdin-forwarded)
 - Declares labels for filtering
 - Depends on *targets* (not other tasks) — this keeps the dependency model
-  simple and avoids redundant execution
+  simple and avoids redundant execution. A task's `depends_on` gates **only
+  when it runs**: an unsatisfied dependency leaves the task unexecuted but
+  never changes the status of the targets it satisfies, and never cascades
+  to block downstream targets.
 - No rollback
 
 ## Conventions

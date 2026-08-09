@@ -10,6 +10,11 @@ pub type RunFn = Arc<dyn Fn() -> anyhow::Result<()> + Send + Sync>;
 ///   [`run`](Task::depends_on) (dependency on *targets*, not other tasks)
 /// - [`labels`](Task::label) for filtering and disabling
 ///
+/// `depends_on` gates **only** when the task runs: an unsatisfied dependency
+/// means the task stays unexecuted, but never changes the satisfaction status
+/// of the targets it satisfies (those are decided by their own checks) and
+/// never blocks downstream targets.
+///
 /// Tasks are **not presumed idempotent** — a task is never run twice within a
 /// single `apply` invocation, and tasks that fail to satisfy a target are not
 /// retried automatically. Execution is **serial** to support interactive
@@ -54,8 +59,10 @@ impl Task {
 
     /// Declare a dependency on a target being satisfied before this task runs.
     ///
-    /// This creates an ordering constraint: the task will not execute until
-    /// the named target reports satisfied.
+    /// This is a run gate: the task does not execute until the named target
+    /// reports satisfied. It never affects the satisfaction status of the
+    /// targets this task satisfies (those are decided by their own checks),
+    /// and an unsatisfied dependency does not block downstream targets.
     pub fn depends_on(mut self, target: impl Into<String>) -> Self {
         self.depends_on.push(target.into());
         self

@@ -211,6 +211,33 @@ let out = git::status("/home/user/src/repo")?;
 let clean = git::is_clean("/home/user/src/repo")?;
 let is_repo = git::is_git_repo("/home/user/src/repo")?;
 let fresh = git::is_up_to_date_with_git("/home/user/src/repo/target", "/home/user/src/repo")?;
+git::switch("/home/user/src/repo", "dev")?;              // git switch dev
+git::switch_create("/home/user/src/repo", "my-config")?; // git switch -c my-config
+```
+
+`git::clone` takes git-default options; use the [`CloneOptions`](src/tools/git.rs)
+builder to control branches and submodules:
+
+```rust
+use chezfl::tools::git::CloneOptions;
+
+// clone every branch and all submodules, checking out `main`
+CloneOptions::new()
+    .all_branches()                 // --no-single-branch
+    .submodules()                   // --recurse-submodules
+    .branch("main")                 // --branch main (default checkout)
+    .clone("https://github.com/user/repo", "/home/user/src/repo")?;
+
+// fetch every branch explicitly (no default branch override)
+CloneOptions::new()
+    .all_branches()                 // --no-single-branch
+    .clone("https://github.com/user/repo", "/home/user/src/repo")?;
+
+// fetch only one branch and check it out
+CloneOptions::new()
+    .single_branch()                // --single-branch
+    .branch("main")                 // --branch main
+    .clone("https://github.com/user/repo", "/home/user/src/repo")?;
 ```
 
 ### `tools::cargo`

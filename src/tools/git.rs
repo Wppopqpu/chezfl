@@ -4,12 +4,117 @@ use anyhow::Context;
 
 use crate::cmd::{Output, cmd};
 
-/// Clone a repository into `dir`.
+/// Builder for `git clone` invocations.
+///
+/// Controls which branches are fetched and whether submodules are cloned.
+///
+/// # Example
+///
+/// ```no_run
+/// use chezfl::tools::git::CloneOptions;
+/// // clone every branch and all submodules, checking out `main`
+/// CloneOptions::new()
+///     .all_branches()
+///     .submodules()
+///     .branch("main")
+///     .clone("https://github.com/user/repo", "/home/user/src/repo")?;
+/// # anyhow::Ok(())
+/// ```
+#[derive(Clone, Default)]
+pub struct CloneOptions {
+    branch: Option<String>,
+    branches: Branches,
+    submodules: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+enum Branches {
+    /// Git default: fetch all branches (no `--single-branch` flag).
+    #[default]
+    All,
+    /// Fetch only the requested branch (`--single-branch`).
+    Single,
+    /// Fetch all branches explicitly (`--no-single-branch`).
+    NoSingle,
+}
+
+impl CloneOptions {
+    /// Create a builder with git-default clone behavior.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Check out `branch` instead of the remote default HEAD
+    /// (`--branch <branch>`). Independent of the fetch scope chosen by
+    /// [`single_branch`](Self::single_branch)/[`all_branches`](Self::all_branches).
+    pub fn branch(mut self, branch: &str) -> Self {
+        self.branch = Some(branch.to_string());
+        self
+    }
+
+    /// Fetch only the requested branch (`--single-branch`).
+    pub fn single_branch(mut self) -> Self {
+        self.branches = Branches::Single;
+        self
+    }
+
+    /// Fetch all branches explicitly (`--no-single-branch`).
+    pub fn all_branches(mut self) -> Self {
+        self.branches = Branches::NoSingle;
+        self
+    }
+
+    /// Initialize and clone all submodules (`--recurse-submodules`).
+    pub fn submodules(mut self) -> Self {
+        self.submodules = true;
+        self
+    }
+
+    /// Clone a repository into `dir` with the configured options.
+    ///
+    /// Interactive — may prompt for credentials.
+    pub fn clone(self, url: &str, dir: impl AsRef<Path>) -> anyhow::Result<Output> {
+        let dir = dir.as_ref().to_string_lossy().to_string();
+        let mut c = cmd("git").arg("clone");
+        if let Some(branch) = &self.branch {
+            c = c.arg("--branch").arg(branch);
+        }
+        match self.branches {
+            Branches::All => {}
+            Branches::Single => c = c.arg("--single-branch"),
+            Branches::NoSingle => c = c.arg("--no-single-branch"),
+        }
+        if self.submodules {
+            c = c.arg("--recurse-submodules");
+        }
+        c.args(&[url, &dir]).exec()
+    }
+}
+
+/// Clone a repository into `dir` with git-default options.
+///
+/// Interactive — may prompt for credentials. See [`CloneOptions`] for
+/// single-branch, branch checkout, all-branch, and submodule options.
+pub fn clone(url: &str, dir: impl AsRef<Path>) -> anyhow::Result<Output> {
+    CloneOptions::new().clone(url, dir)
+}
+
+/// Switch the current branch in `dir` via `git switch <branch>`.
 ///
 /// Interactive — may prompt for credentials.
-pub fn clone(url: &str, dir: impl AsRef<Path>) -> anyhow::Result<Output> {
+pub fn switch(dir: impl AsRef<Path>, branch: &str) -> anyhow::Result<Output> {
     let dir = dir.as_ref().to_string_lossy().to_string();
-    cmd("git").args(&["clone", url, &dir]).exec()
+    cmd("git").args(&["-C", &dir, "switch", branch]).exec()
+}
+
+/// Create `branch` in `dir` and switch to it via `git switch -c <branch>`.
+///
+/// Interactive — may prompt for credentials.
+pub fn switch_create(dir: impl AsRef<Path>, branch: &str) -> anyhow::Result<Output> {
+    let dir = dir.as_ref().to_string_lossy().to_string();
+    cmd("git")
+        .args(&["-C", &dir, "switch", "-c", branch])
+        .exec()
 }
 
 /// Pull latest changes in `dir`.

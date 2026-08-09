@@ -185,7 +185,7 @@ let out = cmd("ping")
 ## Built-in tools
 
 chezfl ships with convenience wrappers for common programs in
-[`chezfl::tools`](https://docs.rs/chezfl/latest/chezfl/tools/index.html):
+[`chezfl::tools`](https://docs.rs/chezfl/latest/chezfl/tools/index.html).
 
 ### `tools::yay`
 
@@ -209,7 +209,87 @@ git::pull("/home/user/src/repo")?;
 git::fetch("/home/user/src/repo")?;
 let out = git::status("/home/user/src/repo")?;
 let clean = git::is_clean("/home/user/src/repo")?;
+let is_repo = git::is_git_repo("/home/user/src/repo")?;
+let fresh = git::is_up_to_date_with_git("/home/user/src/repo/target", "/home/user/src/repo")?;
 ```
+
+### `tools::cargo`
+
+```rust
+use chezfl::tools::cargo;
+
+cargo::install("bat")?;                          // cargo install bat
+cargo::install_path("/home/user/src/tool")?;     // cargo install --path ...
+cargo::install_root("rg", "/home/user/.local")?; // cargo install --root ...
+cargo::install_force("bat")?;                    // cargo install --force bat
+let installed = cargo::is_installed("bat")?;
+```
+
+### `tools::stow`
+
+```rust
+use chezfl::tools::stow;
+
+stow::stow("~/dotfiles", "~", "bash")?;         // stow -S
+stow::unstow("~/dotfiles", "~", "bash")?;       // stow -D
+stow::restow("~/dotfiles", "~", "bash")?;       // stow -R
+stow::stow_everything("~/dotfiles", "~")?;      // stow every package dir
+let stowed = stow::is_stowed("~/dotfiles", "~", "bash")?;
+let all = stow::is_everything_stowed("~/dotfiles", "~")?;
+```
+
+### `tools::systemd`
+
+```rust
+use chezfl::tools::systemd::Systemctl;
+
+Systemctl::new().enable("foo.service")?;          // sudo systemctl enable
+Systemctl::new().now().enable("foo.service")?;    // sudo systemctl enable --now
+Systemctl::new().user().start("foo.service")?;    // systemctl --user start
+Systemctl::new().daemon_reload()?;                // sudo systemctl daemon-reload
+
+let running = Systemctl::new().is_unit_running("foo.service")?;
+```
+
+System units run via `sudo` (never polkit). `--user` units run directly
+without sudo. Read-only checks (`is_unit_running`) never prompt. Free
+helpers are also provided: `systemd::enable`, `systemd::enable_now`,
+`systemd::daemon_reload`, `systemd::start`, `systemd::stop`,
+`systemd::restart`, `systemd::is_unit_running`.
+
+### `tools::mime`
+
+```rust
+use chezfl::tools::mime;
+
+let default = mime::query_default("text/plain")?;
+let is_nvim = mime::is_default("text/plain", "nvim.desktop")?;
+mime::set_default("text/plain", "nvim.desktop")?;
+```
+
+### `tools::fs`
+
+```rust
+use chezfl::tools::fs;
+
+fs::is_file("/etc/passwd")?;
+fs::is_dir("/home/user")?;
+fs::is_symlink("/usr/local/bin/rg")?;
+fs::is_runnable("/usr/bin/yay")?;
+fs::exists("/tmp/x")?;
+fs::read_to_string("/tmp/x")?;
+fs::write("/tmp/x", "content")?;
+fs::copy("/tmp/x", "/tmp/y")?;
+fs::remove("/tmp/x")?;
+fs::remove_all("/tmp/dir")?;
+fs::create_dir("/tmp/a/b")?;
+fs::symlink("/tmp/x", "/tmp/link")?;
+let mtime = fs::mtime("/tmp/x")?;
+let fresh = fs::up_to_date("/tmp/x", &["/tmp/src"])?;
+```
+
+Predicates return `false` (never error) for missing paths; operations
+attach the offending path to their error messages.
 
 ## Examples
 

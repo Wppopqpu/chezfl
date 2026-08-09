@@ -11,7 +11,8 @@ define **tasks** that satisfy them — by writing Rust code.
   [ADR-0001](docs/adr/0001-configuration-as-code.md).
 - **Declare, then converge** — describe the target state and the actions
   needed to reach it; chezfl figures out what to run and in what order.
-- **Idempotent tasks** — tasks should be safe to run repeatedly.
+- **At most once per apply** — a task is never run twice in a single run;
+  idempotency is not required.
 - **Best-effort** — if a dependency can't be satisfied, dependent targets
   are skipped but the rest continues.
 
@@ -301,7 +302,7 @@ derivation; `check_dep` guards whether a leaf's check runs.
 
 A **Task** is an actionable unit that satisfies 1+ targets.
 
-- Has a `run` closure (idempotent, serial, stdin-forwarded)
+- Has a `run` closure (at most once per apply, serial, stdin-forwarded)
 - Declares labels for filtering
 - Depends on *targets* (not other tasks) — this keeps the dependency model
   simple and avoids redundant execution

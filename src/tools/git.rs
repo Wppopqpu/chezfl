@@ -40,6 +40,18 @@ pub fn is_clean(dir: impl AsRef<Path>) -> anyhow::Result<bool> {
     Ok(out.stdout.trim().is_empty())
 }
 
+/// Check whether `dir` is inside a git work tree.
+///
+/// Uses `git rev-parse --is-inside-work-tree`. Non-interactive. Suitable
+/// for use in a target's `check` function.
+pub fn is_git_repo(dir: impl AsRef<Path>) -> anyhow::Result<bool> {
+    let dir = dir.as_ref().to_string_lossy().to_string();
+    let out = cmd("git")
+        .args(&["-C", &dir, "rev-parse", "--is-inside-work-tree"])
+        .run()?;
+    Ok(out.stdout.trim() == "true")
+}
+
 /// Check whether `target` is as new as the latest commit on the current
 /// branch of the repository at `dir`.
 ///

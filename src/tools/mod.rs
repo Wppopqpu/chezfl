@@ -9,10 +9,12 @@
 /// Available tools:
 /// - [`git`] — clone, pull, fetch, status
 /// - [`yay`] — install, remove, update, is_installed
+/// - [`stow`] — stow, unstow, restow, stow_everything, is_stowed, is_everything_stowed
 /// - [`mime`] — xdg-mime query, is_default, set_default
 /// - [`fs`] — file predicates (is_file, is_dir, exists, mtime, up_to_date)
 ///   and operations (read, write, copy, remove, symlink)
 pub mod fs;
 pub mod git;
 pub mod mime;
+pub mod stow;
 pub mod yay;

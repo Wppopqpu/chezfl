@@ -46,7 +46,7 @@ pub fn stow_everything(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(
     {
         let entry =
             entry.with_context(|| format!("failed to read stow directory {}", from.display()))?;
-        if entry.file_type()?.is_dir() {
+        if entry.file_type()?.is_dir() && !is_ignored(entry.file_name().to_str().unwrap_or("")) {
             let package = entry.file_name().to_string_lossy().into_owned();
             stow(from, &to, &package)?;
         }
@@ -63,24 +63,40 @@ pub fn stow_everything(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<(
 /// Suitable for use in a target's `check` function. Returns `false` when
 /// the package directory does not exist.
 pub fn is_stowed(from: impl AsRef<Path>, to: impl AsRef<Path>, package: &str) -> Result<bool> {
-    let from = from.as_ref();
-    let to = to.as_ref();
-    let package_dir = from.join(package);
-    let Ok(entries) = std::fs::read_dir(&package_dir) else {
+    let src = from.as_ref().join(package);
+    let dst = to.as_ref();
+    is_stowed_impl(src, dst)
+}
+
+fn is_stowed_impl(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<bool> {
+    let src = src.as_ref();
+    let dst = dst.as_ref();
+    let Ok(entries) = std::fs::read_dir(src) else {
+        // target do not exists
         return Ok(false);
     };
     for entry in entries {
         let entry = entry.with_context(|| {
-            format!("failed to read package directory {}", package_dir.display())
+            format!("failed to read package directory {}", src.display())
         })?;
-        let link = to.join(entry.file_name());
-        let is_link = link
-            .symlink_metadata()
-            .map(|m| m.is_symlink())
-            .unwrap_or(false);
-        if !is_link || !symlink_resolves_to(&link, &entry.path()) {
-            return Ok(false);
+        let target = dst.join(entry.file_name());
+
+        if target.is_symlink() {
+            if !symlink_resolves_to(&target, &entry.path()) {
+
+                return Ok(false);
+            }
+
+            continue;
         }
+
+        if target.is_dir() {
+            if !is_stowed_impl(entry.path(), &target)? {
+                return Ok(false);
+            }
+            continue;
+        }
+        return Ok(false);
     }
     Ok(true)
 }
@@ -99,7 +115,7 @@ pub fn is_everything_stowed(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Res
     for entry in entries {
         let entry =
             entry.with_context(|| format!("failed to read stow directory {}", from.display()))?;
-        if entry.file_type()?.is_dir() {
+        if entry.file_type()?.is_dir() && !is_ignored(entry.file_name().to_str().unwrap_or("")) {
             let package = entry.file_name().to_string_lossy().into_owned();
             if !is_stowed(from, to, &package)? {
                 return Ok(false);
@@ -129,6 +145,11 @@ fn symlink_resolves_to(link: &Path, source: &Path) -> bool {
         (Ok(link_real), Ok(source_real)) => link_real == source_real,
         _ => false,
     }
+}
+
+const IGNORED: &[&str] = &[".git"];
+fn is_ignored(name: &str) -> bool {
+    IGNORED.contains(&name)
 }
 
 #[cfg(test)]

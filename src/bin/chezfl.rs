@@ -6,8 +6,14 @@ fn home() -> PathBuf {
     PathBuf::from(std::env::var("HOME").expect("HOME must be set"))
 }
 
-/// return path related to home
-fn home_path(path: &str) -> PathBuf {
+/// resolve the path:
+/// if starts with / -> absolute path;
+/// otherwise relative to home.
+fn resolve_path(path: &str) -> PathBuf {
+    if path.starts_with('/') {
+        return path.into();
+    }
+
     home().join(path)
 }
 
@@ -84,7 +90,7 @@ fn register_repos(app: &mut App) {
     let mut repo_target = Target::new("repo").description("all repos are cloned");
 
     for &(name, dir, url, branch) in REPOS {
-        let path = home_path(dir);
+        let path = resolve_path(dir);
         app.target(
             Target::new(format!("repo.{name}"))
                 .check({
@@ -129,8 +135,8 @@ fn register_stow(app: &mut App) {
     let mut target_stow = Target::new("stow").description("all repos are stowed");
 
     for &(name, from, to) in SPEC {
-        let from = home_path(from);
-        let to = home_path(to);
+        let from = resolve_path(from);
+        let to = resolve_path(to);
 
         app.target(
             Target::new(format!("stow.{name}"))
@@ -205,7 +211,7 @@ fn register_mime(app: &mut App) {
 }
 
 fn register_niri_wants(app: &mut App) {
-    let sdu = home_path(".config/systemd/user");
+    let sdu = resolve_path(".config/systemd/user");
     let wants_dir = sdu.join("niri.service.wants");
 
     const NIRI_SERVICES: &[(&str, &str)] = &[
@@ -250,7 +256,7 @@ fn register_niri_wants(app: &mut App) {
 }
 
 fn register_koishi_cursors(app: &mut App) {
-    let cursor_dir = home_path(".icons/koishi_cursors");
+    let cursor_dir = resolve_path(".icons/koishi_cursors");
     let cursor_out = cursor_dir.join("cursors/text");
     let cursor_original = cursor_dir.join("original");
     let win2xcurtheme = PathBuf::from("/usr/bin/win2xcurtheme");
@@ -281,7 +287,7 @@ fn register_koishi_cursors(app: &mut App) {
 
 fn register_shell_completions(app: &mut App) {
     let binary = std::env::current_exe().expect("failed to get current exe path");
-    let completion_file = home_path(".config/fish/completions/chezfl.fish");
+    let completion_file = resolve_path(".config/fish/completions/chezfl.fish");
 
     app.target(
         Target::new("chezfl_fish_completions")
@@ -344,6 +350,38 @@ fn register_fonts(app: &mut App) {
     app.target(Target::new("fonts").depends_on("tex_live_fonts"));
 }
 
+fn register_paths(app: &mut App) {
+    // (name, path)
+    const PATHS: &[(&str, &str)] = &[("pictures", "pictures"), ("projects", "projects")];
+
+    let mut target = Target::new("paths").description("all paths are created");
+
+    for &(name, path) in PATHS {
+        let path = resolve_path(path);
+        app.target(
+            Target::new(format!("path.{name}"))
+                .description(format!("path {} is created", path.display()))
+                .check({
+                    let path = path.clone();
+                    move || fs::is_dir(&path)
+                }),
+        );
+
+        app.task(
+            Task::new(format!("mkpath.{name}"))
+                .satisfies(format!("path.{name}"))
+                .run({
+                    let path = path.clone();
+                    move || fs::create_dir(&path)
+                }),
+        );
+
+        target = target.depends_on(format!("path.{name}"));
+    }
+
+    app.target(target);
+}
+
 fn register_grouping_targets(app: &mut App) {
     app.target(
         Target::new("install_systemd_units")
@@ -380,7 +418,8 @@ fn register_grouping_targets(app: &mut App) {
             .depends_on("core")
             .depends_on("repo")
             .depends_on("stow")
-            .depends_on("fonts"),
+            .depends_on("fonts")
+            .depends_on("paths"),
     );
 }
 
@@ -397,6 +436,7 @@ fn main() -> anyhow::Result<()> {
     register_shell_completions(&mut app);
     register_fonts(&mut app);
     register_grouping_targets(&mut app);
+    register_paths(&mut app);
 
     app.validate()?;
     run_cli(&mut app)

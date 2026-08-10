@@ -76,14 +76,12 @@ fn is_stowed_impl(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<bool> 
         return Ok(false);
     };
     for entry in entries {
-        let entry = entry.with_context(|| {
-            format!("failed to read package directory {}", src.display())
-        })?;
+        let entry =
+            entry.with_context(|| format!("failed to read package directory {}", src.display()))?;
         let target = dst.join(entry.file_name());
 
         if target.is_symlink() {
             if !symlink_resolves_to(&target, &entry.path()) {
-
                 return Ok(false);
             }
 

@@ -1,5 +1,5 @@
 use chezfl::tools::{fs, git, mime, stow, yay};
-use chezfl::{App, Target, Task, run_cli};
+use chezfl::{App, Target, Task, run_cli, run_cmd};
 use std::path::PathBuf;
 
 fn home() -> PathBuf {
@@ -29,7 +29,7 @@ fn register_core(app: &mut App) {
 }
 
 fn register_software(app: &mut App) {
-    const SOFTWARES: &[&str] = &["git", "stow", "xdg-utils"];
+    const SOFTWARES: &[&str] = &["git", "stow", "texlive-basic", "xdg-utils"];
 
     for &pkgname in SOFTWARES {
         app.target(
@@ -313,6 +313,37 @@ fn register_shell_completions(app: &mut App) {
     );
 }
 
+fn register_fonts(app: &mut App) {
+    app.target(
+        Target::new("tex_live_fonts")
+            .description("tex live fonts are enabled in system")
+            .check(move || fs::is_symlink("/etc/fonts/conf.d/09-texlive-fonts.conf")),
+    );
+
+    app.task(
+        Task::new("enable_tex_live_fonts")
+            .description(
+                "conf file /usr/share/fontconfig/conf.avail/09-texlive-fonts.conf is enabled",
+            )
+            .depends_on("pkg.texlive-basic")
+            .satisfies("tex_live_fonts")
+            .run(move || {
+                run_cmd(
+                    "sudo",
+                    &[
+                        "ln",
+                        "-s",
+                        "/usr/share/fontconfig/conf.avail/09-texlive-fonts.conf",
+                        "/etc/fonts/conf.d/09-texlive-fonts.conf",
+                    ],
+                )
+                .map(|_| ())
+            }),
+    );
+
+    app.target(Target::new("fonts").depends_on("tex_live_fonts"));
+}
+
 fn register_grouping_targets(app: &mut App) {
     app.target(
         Target::new("install_systemd_units")
@@ -348,7 +379,8 @@ fn register_grouping_targets(app: &mut App) {
             .depends_on("mime")
             .depends_on("core")
             .depends_on("repo")
-            .depends_on("stow"),
+            .depends_on("stow")
+            .depends_on("fonts"),
     );
 }
 
@@ -363,6 +395,7 @@ fn main() -> anyhow::Result<()> {
     register_niri_wants(&mut app);
     register_koishi_cursors(&mut app);
     register_shell_completions(&mut app);
+    register_fonts(&mut app);
     register_grouping_targets(&mut app);
 
     app.validate()?;

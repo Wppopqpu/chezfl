@@ -35,7 +35,13 @@ fn register_core(app: &mut App) {
 }
 
 fn register_software(app: &mut App) {
-    const SOFTWARES: &[&str] = &["git", "stow", "texlive-basic", "xdg-utils"];
+    const SOFTWARES: &[&str] = &[
+        "git",
+        "showmethekey", // for noctalia plugin Input Echo Bar
+        "stow",
+        "texlive-basic",
+        "xdg-utils",
+    ];
 
     for &pkgname in SOFTWARES {
         app.target(

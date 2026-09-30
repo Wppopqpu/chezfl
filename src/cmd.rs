@@ -273,6 +273,12 @@ impl Cmd {
     }
 }
 
+/// Request sudo in advance.
+pub fn request_sudo() -> anyhow::Result<()> {
+    cmd("sudo").args(&["true"]).exec()?;
+    Ok(())
+}
+
 fn kill_pid(pid: u32) {
     let _ = std::process::Command::new("kill")
         .arg(pid.to_string())

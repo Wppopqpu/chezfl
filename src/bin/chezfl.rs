@@ -1,4 +1,5 @@
-use chezfl::tools::{fs, git, mime, stow, systemd, yay};
+use chezfl::cfg::network;
+use chezfl::tools::{fs, git, mime, stow, yay};
 use chezfl::{App, Target, Task, run_cli, run_cmd};
 use std::path::PathBuf;
 
@@ -18,7 +19,6 @@ fn resolve_path(path: &str) -> PathBuf {
 }
 
 fn register_core(app: &mut App) {
-    app.target(Target::new("network").description("network is reachable"));
     app.target(Target::new("ssh_key").description("ssh keys are ready"));
 
     app.target(
@@ -37,6 +37,7 @@ fn register_core(app: &mut App) {
 fn register_software(app: &mut App) {
     const SOFTWARES: &[&str] = &[
         "git",
+        "nftables",     // for zapret2
         "showmethekey", // for noctalia plugin Input Echo Bar
         "stow",
         "texlive-basic",
@@ -430,48 +431,6 @@ fn register_grouping_targets(app: &mut App) {
     );
 }
 
-fn register_zapret2(app: &mut App) {
-    const CONFIG: &str = "/opt/zapret2/config";
-
-    app.target(
-        Target::new("zapret2.enabled")
-            .description("zapret2 nfqws2 is enabled")
-            .check(move || {
-                let config = std::fs::read_to_string(CONFIG)?;
-                Ok(config.lines().any(|line| line.trim() == "NFQWS2_ENABLE=1"))
-            }),
-    );
-
-    app.target(
-        Target::new("zapret2.running")
-            .description("zapret2 service is running")
-            .check(|| systemd::is_unit_running("zapret2.service")),
-    );
-
-    app.target(
-        Target::new("zapret2")
-            .description("zapret2 is enabled and running")
-            .depends_on("zapret2.enabled")
-            .depends_on("zapret2.running"),
-    );
-
-    app.task(
-        Task::new("enable_zapret2")
-            .description("enable nfqws2 and start zapret2")
-            .satisfies("zapret2.enabled")
-            .satisfies("zapret2.running")
-            .depends_on("pkg.zapret2")
-            .run(|| {
-                run_cmd(
-                    "sudo",
-                    &["sed", "-i", "s/^NFQWS2_ENABLE=.*/NFQWS2_ENABLE=1/", CONFIG],
-                )?;
-                systemd::enable_now("zapret2.service")?;
-                Ok(())
-            }),
-    );
-}
-
 fn main() -> anyhow::Result<()> {
     let mut app = App::load();
 
@@ -486,7 +445,7 @@ fn main() -> anyhow::Result<()> {
     register_fonts(&mut app);
     register_grouping_targets(&mut app);
     register_paths(&mut app);
-    register_zapret2(&mut app);
+    network::register(&mut app);
 
     app.validate()?;
     run_cli(&mut app)

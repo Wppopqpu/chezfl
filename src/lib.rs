@@ -7,6 +7,7 @@ pub mod cli;
 pub mod cmd;
 #[macro_use]
 pub mod macros;
+pub mod cfg;
 pub mod state;
 pub mod target;
 pub mod task;

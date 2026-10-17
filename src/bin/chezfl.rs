@@ -1,5 +1,5 @@
 use chezfl::cfg::network;
-use chezfl::tools::{fs, git, mime, stow, yay};
+use chezfl::tools::{fs, git, mime, stow, systemd, yay};
 use chezfl::{App, Target, Task, run_cli, run_cmd};
 use std::path::PathBuf;
 
@@ -37,6 +37,7 @@ fn register_core(app: &mut App) {
 fn register_software(app: &mut App) {
     const SOFTWARES: &[&str] = &[
         "git",
+        "miru-zoom-git",
         "nftables",     // for zapret2
         "showmethekey", // for noctalia plugin Input Echo Bar
         "stow",
@@ -223,6 +224,7 @@ fn register_niri_wants(app: &mut App) {
     let wants_dir = sdu.join("niri.service.wants");
 
     const NIRI_SERVICES: &[(&str, &str)] = &[
+        ("miru", "miru.service symlink in niri.service.wants"),
         ("noctalia", "niri.service.wants symlink for noctalia"),
         ("xrdb", "niri.service.wants symlink for xrdb"),
         ("neru", "niri.service.wants symlink for neru"),
@@ -248,7 +250,9 @@ fn register_niri_wants(app: &mut App) {
                     move || {
                         let dst = wants_dir.join(&svc_name);
                         let _ = std::fs::remove_file(&dst);
-                        fs::symlink(sdu.join(&svc_name), dst)
+                        fs::symlink(sdu.join(&svc_name), dst)?;
+                        systemd::Systemctl::new().user().daemon_reload()?;
+                        Ok(())
                     }
                 }),
         );
@@ -263,15 +267,16 @@ fn register_niri_wants(app: &mut App) {
     );
 }
 
-fn register_koishi_cursors(app: &mut App) {
-    let cursor_dir = resolve_path(".icons/koishi_cursors");
+fn register_cursor_theme(app: &mut App, name: &str) {
+    let cursor_dir = resolve_path(&format!(".icons/{name}"));
     let cursor_out = cursor_dir.join("cursors/text");
     let cursor_original = cursor_dir.join("original");
     let win2xcurtheme = PathBuf::from("/usr/bin/win2xcurtheme");
+    let target_name = format!("gui_theme.{name}");
 
     app.target(
-        Target::new("gui_theme.koishi_cursors")
-            .description("koishi cursors are built")
+        Target::new(&target_name)
+            .description(format!("{name} cursors are built"))
             .check({
                 let cursor_out = cursor_out.clone();
                 move || fs::up_to_date(&cursor_out, &[&cursor_original, &win2xcurtheme])
@@ -279,9 +284,9 @@ fn register_koishi_cursors(app: &mut App) {
     );
 
     app.task(
-        Task::new("build_koishi_cursors")
-            .description("build koishi cursors via fish generate.fish")
-            .satisfies("gui_theme.koishi_cursors")
+        Task::new(format!("build_{name}"))
+            .description(format!("build {name} cursors via fish generate.fish"))
+            .satisfies(target_name)
             .run(move || {
                 let status = std::process::Command::new("fish")
                     .arg("generate.fish")
@@ -291,6 +296,12 @@ fn register_koishi_cursors(app: &mut App) {
                 Ok(())
             }),
     );
+}
+
+fn register_cursor_themes(app: &mut App) {
+    for name in ["koishi_cursors", "flandre_cursors"] {
+        register_cursor_theme(app, name);
+    }
 }
 
 fn register_shell_completions(app: &mut App) {
@@ -400,7 +411,8 @@ fn register_grouping_targets(app: &mut App) {
     app.target(
         Target::new("gui_theme")
             .description("GUI theme setup")
-            .depends_on("gui_theme.koishi_cursors"),
+            .depends_on("gui_theme.koishi_cursors")
+            .depends_on("gui_theme.flandre_cursors"),
     );
 
     app.target(
@@ -440,7 +452,7 @@ fn main() -> anyhow::Result<()> {
     register_stow(&mut app);
     register_mime(&mut app);
     register_niri_wants(&mut app);
-    register_koishi_cursors(&mut app);
+    register_cursor_themes(&mut app);
     register_shell_completions(&mut app);
     register_fonts(&mut app);
     register_grouping_targets(&mut app);
